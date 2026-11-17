@@ -177,6 +177,8 @@ ul.list li.editor{flex-direction:column;align-items:stretch;gap:10px;background:
 .winbox{flex:1 1 100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .winbox summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--blue-ink)}
 .winbox[open] summary{margin-bottom:10px}
+.calc{display:flex;flex-direction:column;justify-content:center;background:var(--blue-soft);border-color:var(--blue-soft);color:var(--blue-ink);font-family:var(--head);font-weight:800;min-height:46px;line-height:1.2}
+.calc small{font-family:var(--body);font-weight:500;font-size:11px;color:var(--muted)}
 .checkline{display:flex;align-items:center;gap:10px;font-size:14px}
 .checkline input{width:20px;height:20px;accent-color:var(--blue)}
 .update{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:var(--blue);color:#fff;text-decoration:none}
@@ -537,13 +539,31 @@ function maybeCheckUpdate(){
   if (Date.now() - last > 6*3600e3 || state.update === null && last === 0) checkUpdate(false);
 }
 
-function yearlyPreview(){
-  const out = document.getElementById("nw-preview"); if (!out || !document.getElementById("nw-amt")) return;
-  const a = num(valOf("nw-amt")), sv = num(valOf("nw-saved")) || 0, r = readPeriod("nw");
-  if (!(isFinite(a) && a > 0) || r.err){ out.textContent = "Add an amount if this task needs money. LifeOS works out the monthly contribution for the period."; return; }
-  const m = moneyOf({kind:"yearly", amount:a, saved:sv, period:r.p, contrib:{}});
-  out.textContent = m.status==="done" ? "Already saved in full." : `${m.upcoming ? `From ${monthLabel(m.from)}: ` : ""}about ${inr(m.needed)} a month for ${m.monthsLeft} months, until ${monthLabel(r.p.to)}.`;
+/* Amount, live monthly saving beside it, and amount saved: used by the add form ("nw") and the editor ("ed"). */
+function moneyFields(p, it, live){
+  const l = live ? `data-live="1"` : "";
+  const amt = it && Number(it.amount) > 0 ? Math.round(it.amount) : "", sv = it && Number(it.saved) > 0 ? Math.round(it.saved) : "";
+  return `<div class="grid2">
+      <label class="flabel" for="${p}-amt">Amount ₹<input class="field" id="${p}-amt" ${l} inputmode="numeric" value="${amt}" placeholder="Optional"></label>
+      <div class="flabel">Monthly saving<div class="field calc" id="${p}-monthly" aria-live="polite">–</div></div>
+    </div>
+    <label class="flabel" for="${p}-saved">Saved so far ₹<input class="field" id="${p}-saved" ${l} inputmode="numeric" value="${sv}" placeholder="0"></label>
+    <span class="tiny muted" id="${p}-preview"></span>`;
 }
+function calcMonthly(p){
+  const box = document.getElementById(p+"-monthly"), out = document.getElementById(p+"-preview");
+  if (!box) return;
+  const a = num(valOf(p+"-amt")), sv = num(valOf(p+"-saved")) || 0, r = readPeriod(p);
+  if (!(isFinite(a) && a > 0)){ box.innerHTML = "–"; if (out) out.textContent = "Add an amount if this task needs money. LifeOS works out how much to save each month."; return; }
+  if (r.err){ box.innerHTML = "–"; if (out) out.textContent = r.err; return; }
+  const it = state.editing && p==="ed" ? state.items.get(state.editing) : null;
+  const m = moneyOf({kind:"yearly", amount:a, saved:sv, period:r.p, contrib: it ? (it.contrib||{}) : {}});
+  if (m.status==="done"){ box.innerHTML = `${inr(0)}<small>Saved in full</small>`; if (out) out.textContent = ""; return; }
+  box.innerHTML = `${inr(m.needed)}<small>a month · ${m.monthsLeft} month${m.monthsLeft>1?"s":""}</small>`;
+  if (out) out.textContent = m.upcoming ? `Saving runs ${monthLabel(m.from)} – ${monthLabel(r.p.to)}. Start this month instead: ${inr(goalMoney({amount:a, saved:sv, start:monthKey(state.now), by:r.p.to, contrib:{}}).needed)} a month.`
+                                        : `Saving runs from this month until ${monthLabel(r.p.to)}. ${inr(a - sv)} still to save.`;
+}
+const yearlyPreview = () => calcMonthly("nw");
 function goalPreview(){
   const out = document.getElementById("g-preview"), amtEl = document.getElementById("g-amt"); if (!out || !amtEl) return;
   const amount = num(amtEl.value), saved = num(valOf("g-saved")) || 0, by = valOf("g-by"), start = valOf("g-start");
@@ -577,6 +597,7 @@ function render(){
   for (const id of openBoxes){ const el = main.querySelector("#"+CSS.escape(id)); if (el) el.open = true; }
   for (const [id,v] of Object.entries(liveVals)){ const el = main.querySelector("#"+CSS.escape(id)); if (el){ if (el.type==="checkbox") el.checked = v; else el.value = v; } }
   syncFormVisibility();
+  calcMonthly("nw"); calcMonthly("ed");
   if (focusId){ const el = main.querySelector("#"+CSS.escape(focusId)); el && el.focus(); }
 }
 function syncFormVisibility(){
@@ -698,10 +719,7 @@ function editorRow(id, it){
     <label class="flabel" for="ed-title">Task<input class="field" id="ed-title" data-live="1" maxlength="140" value="${esc(it.title)}"></label>
     <label class="flabel" for="ed-area">Life area<select class="field" id="ed-area" data-live="1">${areaOptions(itemArea(it))}</select></label>
     ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}
-      <div class="grid2">
-        <label class="flabel" for="ed-amt">Amount ₹ <span>Optional</span><input class="field" id="ed-amt" data-live="1" inputmode="numeric" value="${Number(it.amount) > 0 ? Math.round(it.amount) : ""}" placeholder="No amount"></label>
-        <label class="flabel" for="ed-saved">Saved so far ₹<input class="field" id="ed-saved" data-live="1" inputmode="numeric" value="${Number(it.saved) > 0 ? Math.round(it.saved) : ""}" placeholder="0"></label>
-      </div>` : ""}
+      ${moneyFields("ed", it, true)}` : ""}
     <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button>
       <span class="inline"><button class="btn ghost" data-act="ed-cancel">Cancel</button><button class="btn" data-act="ed-save" data-id="${id}">Save</button></span></div>
   </li>`;
@@ -732,11 +750,7 @@ function renderPlan(){
         <input class="field" id="new-title" maxlength="140" placeholder="e.g. Full health checkup, buy a bike, clear loan" aria-label="Task">
         <select class="field" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
         ${periodInputs("nw", null, false)}
-        <div class="grid2">
-          <label class="flabel" for="nw-amt">Amount ₹ <span>Optional</span><input class="field" id="nw-amt" inputmode="numeric" placeholder="e.g. 100000"></label>
-          <label class="flabel" for="nw-saved">Saved so far ₹ <span>Optional</span><input class="field" id="nw-saved" inputmode="numeric" placeholder="0"></label>
-        </div>
-        <span class="tiny muted" id="nw-preview">Add an amount if this task needs money. LifeOS works out the monthly contribution for the period.</span>
+        ${moneyFields("nw", null, false)}
         <button class="btn block" type="submit">Add task</button></form>`
     : `<form class="inline" id="add-form" autocomplete="off">
         <input class="field" id="new-title" maxlength="140" placeholder="${esc(kd.placeholder)}" aria-label="${esc(kd.placeholder)}">
@@ -1419,7 +1433,7 @@ document.addEventListener("click", e => {
   if (act==="pset"){
     const p = b.dataset.p, f = document.getElementById(p+"-pfrom"), t = document.getElementById(p+"-pto");
     if (f && t){ f.value = b.dataset.f; t.value = b.dataset.t; }
-    if (p==="nw") yearlyPreview();
+    calcMonthly(p);
     return;
   }
   if (act==="prog" && it) updateItem(id, {progress: Math.max(0, Math.min(100, (it.progress||0) + Number(b.dataset.d)))});
@@ -1507,7 +1521,7 @@ document.addEventListener("input", e => {
   const k = e.target.dataset && e.target.dataset.j;
   if (k){ ensureDraft(); state.jdraft[k] = e.target.value; if (state.jsaved){ state.jsaved = false; } }
   if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
-  if (["nw-amt","nw-saved","nw-pfrom","nw-pto"].includes(e.target.id)) yearlyPreview();
+  const mm = /^(nw|ed)-(amt|saved|pfrom|pto)$/.exec(e.target.id || ""); if (mm) calcMonthly(mm[1]);
 });
 document.addEventListener("change", e => {
   const t = e.target;
