@@ -179,6 +179,10 @@ ul.list li.editor{flex-direction:column;align-items:stretch;gap:10px;background:
 .winbox[open] summary{margin-bottom:10px}
 .calc{display:flex;flex-direction:column;justify-content:center;background:var(--blue-soft);border-color:var(--blue-soft);color:var(--blue-ink);font-family:var(--head);font-weight:800;min-height:46px;line-height:1.2}
 .calc small{font-family:var(--body);font-weight:500;font-size:11px;color:var(--muted)}
+.ptable{width:100%;border-collapse:collapse;font-size:13px}
+.ptable th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:6px 4px;border-bottom:1px solid var(--line)}
+.ptable td{padding:6px 4px;border-bottom:1px solid var(--line)}
+.ptable td:not(:first-child),.ptable th:not(:first-child){text-align:right}
 .checkline{display:flex;align-items:center;gap:10px;font-size:14px}
 .checkline input{width:20px;height:20px;accent-color:var(--blue)}
 .update{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:var(--blue);color:#fff;text-decoration:none}
@@ -251,7 +255,8 @@ const STARTER = [
 ];
 const EXP_CATS = ["Food","Groceries","Transport","Rent","Bills","Shopping","Health","Education","Entertainment","EMI / Loan","Family","Travel","Other"];
 const INC_CATS = ["Salary","Business","Trading","Freelance","Interest","Gift","Other"];
-const ASSET_TYPES = ["Bank / Cash","Stocks","Mutual funds","Gold","FD / RD","PF / PPF / NPS","Crypto","Real estate","Other"];
+const P2P = "LenDenClub / P2P";
+const ASSET_TYPES = ["Bank / Cash",P2P,"Stocks","Mutual funds","Gold","FD / RD","PF / PPF / NPS","Crypto","Real estate","Other"];
 const LIAB_TYPES = ["Home loan","Personal loan","Vehicle loan","Credit card","Education loan","Borrowed","Other"];
 const MOODS = [["1","Rough"],["2","Low"],["3","Okay"],["4","Good"],["5","Great"]];
 const REPEATS = {daily:"Every day", weekdays:"Mon – Fri", weekends:"Sat & Sun", monthly:"Every month", once:"Once"};
@@ -600,7 +605,25 @@ function render(){
   calcMonthly("nw"); calcMonthly("ed");
   if (focusId){ const el = main.querySelector("#"+CSS.escape(focusId)); el && el.focus(); }
 }
+/* ---------- P2P lending (LenDenClub): monthly interest, reinvested, plus monthly top-ups ---------- */
+const isP2P = a => a && a.kind==="asset" && a.type===P2P;
+function p2pPlan(bal, ratePct, monthly, reinvest, months){
+  const i = (Number(ratePct)||0)/100/12; let b = Number(bal)||0, interest = 0; const rows = [];
+  for (let k=1;k<=months;k++){ const int = b*i; interest += int; if (reinvest) b += int; b += Number(monthly)||0; rows.push({k, int, b}); }
+  return {rows, end:b, interest, added:(Number(monthly)||0)*months};
+}
+const p2pMonthlyInterest = a => Math.round((Number(a.value)||0) * (Number(a.rate)||0)/100/12);
+function p2pPreview(){
+  const out = document.getElementById("w-p2p-preview"); if (!out) return;
+  const v = num(valOf("w-val")), r = num(valOf("w-rate")), m = num(valOf("w-monthly")) || 0, n = parseInt(valOf("w-tenure"),10) || 12;
+  const re = !!(document.getElementById("w-reinvest")||{}).checked;
+  if (!(isFinite(v) && v > 0 && isFinite(r) && r > 0)){ out.textContent = "Enter the amount lent and the interest rate."; return; }
+  const pl = p2pPlan(v, r, m, re, n);
+  out.innerHTML = `Monthly interest now ≈ <b>${inr(v*r/100/12)}</b>. In ${n} months: <b>${inr(pl.end)}</b> (${inr(pl.interest)} interest${m ? `, ${inr(pl.added)} added by you` : ""}${re ? "" : ", interest paid out"}).`;
+}
 function syncFormVisibility(){
+  const wt = document.getElementById("w-type"), wp = document.getElementById("w-p2p");
+  if (wt && wp){ wp.hidden = wt.value!==P2P; if (!wp.hidden) p2pPreview(); }
   const rep = document.getElementById("r-repeat");
   if (rep){ document.getElementById("r-date-wrap").hidden = rep.value!=="once"; document.getElementById("r-dom-wrap").hidden = rep.value!=="monthly"; }
 }
@@ -1199,8 +1222,17 @@ function renderWealth(){
   <form class="card" id="w-form" autocomplete="off">
     <div class="toggle2" role="group" aria-label="Kind"><button type="button" data-act="wmode" data-k="asset" aria-pressed="${!isL}">Asset</button><button type="button" data-act="wmode" data-k="liab" aria-pressed="${isL}">Loan / due</button></div>
     <input class="field" id="w-name" maxlength="60" placeholder="${isL ? "Name, e.g. HDFC credit card" : "Name, e.g. SBI savings, Nifty index fund"}" aria-label="Name">
-    <div class="grid2"><select class="field" id="w-type" data-live="1" aria-label="Type">${(isL?LIAB_TYPES:ASSET_TYPES).map(t=>`<option>${t}</option>`).join("")}</select>
-      <input class="field" id="w-val" inputmode="decimal" placeholder="${isL?"Amount owed ₹":"Current value ₹"}" aria-label="Value in rupees"></div>
+    <div class="grid2"><select class="field" id="w-type" data-live="1" aria-label="Type">${(isL?LIAB_TYPES:ASSET_TYPES).map(t=>`<option ${!isL && t===state.wType ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <input class="field" id="w-val" inputmode="decimal" placeholder="${isL?"Amount owed ₹":state.wType===P2P?"Amount lent ₹":"Current value ₹"}" aria-label="Value in rupees"></div>
+    ${isL ? "" : `<div class="stack" id="w-p2p" hidden>
+      <div class="grid2">
+        <label class="flabel" for="w-rate">Interest % a year<input class="field" id="w-rate" inputmode="decimal" value="35"></label>
+        <label class="flabel" for="w-tenure">Loan tenure (months)<input class="field" id="w-tenure" inputmode="numeric" value="12"></label>
+      </div>
+      <label class="flabel" for="w-monthly">Monthly contribution ₹ <span>New money you lend every month</span><input class="field" id="w-monthly" inputmode="numeric" placeholder="e.g. 1000"></label>
+      <label class="checkline" for="w-reinvest"><input type="checkbox" id="w-reinvest" checked> Re-lend the interest every month</label>
+      <span class="small" id="w-p2p-preview"></span>
+    </div>`}
     <button class="btn block" type="submit">Add ${isL?"loan":"asset"}</button>
   </form>
 
@@ -1214,7 +1246,41 @@ function renderWealth(){
       : `<span class="small muted">Emergency fund, bike, wedding, house: set a target and a date in Goals, and LifeOS works out the monthly amount.</span>`}
   </button>`;
 }
+function p2pRow(id, a){
+  const cm = monthKey(state.now), log = (a.p2pLog||{})[cm] || {}, mi = p2pMonthlyInterest(a), n = Number(a.tenure)||12;
+  const pl = p2pPlan(a.value, a.rate, a.monthly, a.reinvest!==false, n);
+  const earned = Object.values(a.p2pLog||{}).reduce((t,x)=>t+(Number(x.int)||0),0);
+  return `<li style="flex-direction:column;align-items:stretch;gap:10px">
+    <div class="row"><span class="cat inc">LC</span>
+      <div class="main"><span class="title">${esc(a.name)}</span><span class="meta">${Number(a.rate)||0}% a year · ${n}-month loans${a.reinvest!==false ? " · interest re-lent" : ""}</span></div>
+      <input class="field" style="width:104px;padding:7px 9px;text-align:right" id="wv-${id}" data-wid="${id}" inputmode="decimal" value="${Math.round(Number(a.value)||0)}" aria-label="Amount lent on ${esc(a.name)}">
+      ${delBtn(id)}</div>
+    <div class="grid3">
+      <div class="mini"><span class="tiny muted">Interest / month</span><span class="amt pos">${inr(mi)}</span></div>
+      <div class="mini"><span class="tiny muted">You add / month</span><span class="amt">${inr(Number(a.monthly)||0)}</span></div>
+      <div class="mini"><span class="tiny muted">Earned so far</span><span class="amt">${inr(earned)}</span></div>
+    </div>
+    <div class="notice" style="padding:10px 12px"><div class="main">
+      <span class="small"><b>${MONTH[state.now.getMonth()]}:</b> ${log.int ? `interest ${inr(log.int)} ✓` : "interest not added"} · ${Number(a.monthly) ? (log.add ? `contribution ${inr(log.add)} ✓` : "contribution not added") : "no monthly contribution set"}</span>
+      <span class="inline">${!log.int && mi ? `<button class="btn ghost" style="padding:7px 12px" data-act="p2p-int" data-id="${id}">Add interest ${inr(mi)}</button>` : ""}${Number(a.monthly) && !log.add ? `<button class="btn" style="padding:7px 12px" data-act="p2p-add" data-id="${id}">Add ${inr(a.monthly)}</button>` : ""}</span>
+    </div></div>
+    <div class="between small"><span>In ${n} months</span><span><span class="amt">${inr(pl.end)}</span> <span class="muted">· ${inr(pl.interest)} interest</span></span></div>
+    <details class="winbox"><summary>Month-by-month plan and settings</summary>
+      <div style="overflow-x:auto"><table class="ptable"><thead><tr><th>Month</th><th>Interest</th><th>Balance</th></tr></thead><tbody>
+        ${pl.rows.map(r => { const d = new Date(state.now.getFullYear(), state.now.getMonth()+r.k, 1); return `<tr><td>${MON[d.getMonth()]} ${yy(d.getFullYear())}</td><td>${inr(r.int)}</td><td>${inr(r.b)}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      <div class="grid3" style="margin-top:10px">
+        <label class="flabel" for="pr-${id}">Rate %<input class="field" id="pr-${id}" data-p2p="rate" data-pid="${id}" inputmode="decimal" value="${Number(a.rate)||0}"></label>
+        <label class="flabel" for="pm-${id}">Monthly ₹<input class="field" id="pm-${id}" data-p2p="monthly" data-pid="${id}" inputmode="numeric" value="${Number(a.monthly)||0}"></label>
+        <label class="flabel" for="pt-${id}">Months<input class="field" id="pt-${id}" data-p2p="tenure" data-pid="${id}" inputmode="numeric" value="${n}"></label>
+      </div>
+      <label class="checkline" for="pi-${id}" style="margin-top:8px"><input type="checkbox" id="pi-${id}" data-p2p="reinvest" data-pid="${id}" ${a.reinvest!==false ? "checked" : ""}> Re-lend the interest every month</label>
+      <span class="tiny muted">Rates are what the platform quotes, before defaults and fees.</span>
+    </details>
+  </li>`;
+}
 function wealthRow(id, a, isL){
+  if (!isL && isP2P(a)) return p2pRow(id, a);
   const upd = a.updated ? new Date(a.updated) : null;
   return `<li><span class="cat ${isL?"":"inc"}">${initials(a.type)}</span>
     <div class="main"><span class="title">${esc(a.name)}</span><span class="meta">${esc(a.type)}${upd?` · updated ${upd.getDate()} ${MON[upd.getMonth()]}`:""}</span></div>
@@ -1388,6 +1454,15 @@ document.addEventListener("click", e => {
     toast(saved >= m.amount ? `${it.kind==="yearly" ? "Amount reached" : "Goal reached"}: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
     return;
   }
+  if ((act==="p2p-int" || act==="p2p-add") && it){
+    const cm = monthKey(state.now), plog = {...(it.p2pLog||{})}, cur = {...(plog[cm]||{})};
+    let value = Number(it.value)||0;
+    if (act==="p2p-int"){ const x = p2pMonthlyInterest(it); cur.int = (Number(cur.int)||0) + x; if (it.reinvest!==false) value += x; toast(`Interest ${inr(x)} added${it.reinvest!==false ? " and re-lent" : ""}`); }
+    else { const x = Number(it.monthly)||0; cur.add = (Number(cur.add)||0) + x; value += x; toast(`${inr(x)} added to ${it.name}`); }
+    plog[cm] = cur;
+    updateItem(id, {value, p2pLog:plog, updated:Date.now()});
+    return;
+  }
   if (act==="hmetric"){ state.hmetric = b.dataset.k; render(); return; }
   if (act==="txtype"){ state.txType = b.dataset.k; render(); return; }
   if (act==="wmode"){ state.liabMode = b.dataset.k==="liab"; render(); return; }
@@ -1522,6 +1597,7 @@ document.addEventListener("input", e => {
   if (k){ ensureDraft(); state.jdraft[k] = e.target.value; if (state.jsaved){ state.jsaved = false; } }
   if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
   const mm = /^(nw|ed)-(amt|saved|pfrom|pto)$/.exec(e.target.id || ""); if (mm) calcMonthly(mm[1]);
+  if (["w-val","w-rate","w-monthly","w-tenure"].includes(e.target.id)) p2pPreview();
 });
 document.addEventListener("change", e => {
   const t = e.target;
@@ -1537,6 +1613,16 @@ document.addEventListener("change", e => {
     if (!isFinite(v) || v < 0){ toast("Enter an amount in rupees."); return; }
     const cb = {...(settings().catBudgets||{})}; if (v) cb[t.dataset.cat] = v; else delete cb[t.dataset.cat];
     saveSettings({catBudgets:cb}, true); toast(v ? `${t.dataset.cat} limit: ${inr(v)}` : `${t.dataset.cat}: no limit`);
+  }
+  if (t.id==="w-type"){ state.wType = t.value; const wv = document.getElementById("w-val"); if (wv) wv.placeholder = t.value===P2P ? "Amount lent ₹" : "Current value ₹"; syncFormVisibility(); }
+  if (t.id==="w-reinvest") p2pPreview();
+  if (t.dataset.p2p){
+    const it = state.items.get(t.dataset.pid); if (!it) return;
+    const k = t.dataset.p2p;
+    if (k==="reinvest"){ updateItem(t.dataset.pid, {reinvest:t.checked}); return; }
+    const v = num(t.value);
+    if (!isFinite(v) || v < 0 || (k==="tenure" && (v < 1 || v > 120))){ toast(k==="tenure" ? "Months must be 1 to 120." : "Enter a number."); return; }
+    updateItem(t.dataset.pid, {[k]: k==="tenure" ? Math.round(v) : v}); toast("Saved");
   }
   if (t.dataset.wid){
     const v = num(t.value);
@@ -1608,8 +1694,17 @@ document.addEventListener("submit", e => {
     const name = val("w-name").trim(), v = num(val("w-val"));
     if (!name){ toast("Give it a name."); return; }
     if (!isFinite(v) || v < 0){ toast("Enter the value in rupees."); return; }
-    clear("w-name","w-val");
-    setItem(newId(), {kind: state.liabMode ? "liability" : "asset", name, type:val("w-type"), value:v, created:Date.now(), updated:Date.now()});
+    const type = val("w-type"), data = {kind: state.liabMode ? "liability" : "asset", name, type, value:v, created:Date.now(), updated:Date.now()};
+    if (!state.liabMode && type===P2P){
+      const r = num(val("w-rate")), m = val("w-monthly").trim() ? num(val("w-monthly")) : 0, n = parseInt(val("w-tenure"),10);
+      if (!isFinite(r) || r <= 0 || r > 100){ toast("Enter the interest rate, e.g. 35."); return; }
+      if (!isFinite(m) || m < 0){ toast("Monthly contribution must be a number."); return; }
+      if (!(n >= 1 && n <= 120)){ toast("Loan tenure must be 1 to 120 months."); return; }
+      Object.assign(data, {rate:r, monthly:m, tenure:n, reinvest: !!(document.getElementById("w-reinvest")||{}).checked, p2pLog:{}});
+    }
+    clear("w-name","w-val","w-monthly");
+    setItem(newId(), data);
+    if (data.rate) toast(`Added · about ${inr(p2pMonthlyInterest(data))} interest a month`);
   }
   if (f.id==="hg-form"){
     const g = k => num(val(k));
