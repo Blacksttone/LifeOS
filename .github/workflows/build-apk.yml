@@ -27,7 +27,19 @@ jobs:
             echo "::error::Add the SIGNING_KEYSTORE_B64 secret (Settings > Secrets and variables > Actions). Without the same key, new builds can't update the installed app."
             exit 1
           fi
-          printf '%s' "$SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          # Phones often add spaces or line breaks when copying; drop them.
+          clean=$(printf '%s' "$SIGNING_KEYSTORE_B64" | tr -d ' \r\n\t')
+          echo "Secret length after cleanup: ${#clean} characters (expected 3452)"
+          if ! printf '%s' "$clean" | base64 -d > "$RUNNER_TEMP/release.keystore" 2>/dev/null; then
+            echo "::error::SIGNING_KEYSTORE_B64 is not valid base64 (${#clean} characters, expected 3452). Paste the full key text again."
+            exit 1
+          fi
+          fp=$(keytool -list -v -keystore "$RUNNER_TEMP/release.keystore" -storepass vaazhkai123 2>/dev/null | grep -m1 'SHA256:' | awk '{print $2}')
+          echo "Signing key fingerprint: $fp"
+          if [ "$fp" != "B7:45:69:79:79:FF:76:38:DD:D8:4E:8B:96:FD:CB:94:61:A7:F9:53:16:49:B2:45:21:D4:28:CA:E3:87:BE:BD" ]; then
+            echo "::error::SIGNING_KEYSTORE_B64 decodes, but it is not the LifeOS signing key. Paste the full key text again."
+            exit 1
+          fi
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
       # Version codes start at 100 so they stay above builds made before this repo existed.
       - name: Version
