@@ -12,6 +12,48 @@ public class Bridge {
     @JavascriptInterface
     public boolean isApp() { return true; }
 
+    /**
+     * Fetches JSON for live prices outside the WebView, so sites without CORS headers work.
+     * Only the price sources the app uses are allowed. The answer arrives as
+     * window.__nativeFetchDone(id, httpStatus, bodyOrNull).
+     */
+    @JavascriptInterface
+    public void fetch(final String id, final String url) {
+        new Thread(() -> {
+            int code = 0;
+            String body = null;
+            try {
+                java.net.URL u = new java.net.URL(url);
+                String host = u.getHost();
+                boolean allowed = "https".equals(u.getProtocol())
+                        && ("api.mfapi.in".equals(host) || host.endsWith(".finance.yahoo.com"));
+                if (allowed) {
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                    c.setConnectTimeout(15000);
+                    c.setReadTimeout(15000);
+                    c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) LifeOS");
+                    c.setRequestProperty("Accept", "application/json");
+                    code = c.getResponseCode();
+                    java.io.InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                    if (in != null) {
+                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = in.read(buf)) > 0 && out.size() < 2_000_000) out.write(buf, 0, n);
+                        in.close();
+                        body = out.toString("UTF-8");
+                    }
+                    c.disconnect();
+                }
+            } catch (Exception e) {
+                code = 0;
+                body = null;
+            }
+            activity.runJs("window.__nativeFetchDone && window.__nativeFetchDone(" + org.json.JSONObject.quote(id) + "," + code + ","
+                    + (body == null ? "null" : org.json.JSONObject.quote(body)) + ")");
+        }).start();
+    }
+
     @JavascriptInterface
     public int versionCode() {
         try {

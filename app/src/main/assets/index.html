@@ -667,9 +667,86 @@ function p2pPreview(){
   const pl = p2pPlan(v, r, m, re, n);
   out.innerHTML = `Monthly interest now ≈ <b>${inr(v*r/100/12)}</b>. In ${n} months: <b>${inr(pl.end)}</b> (${inr(pl.interest)} interest${m ? `, ${inr(pl.added)} added by you` : ""}${re ? "" : ", interest paid out"}).`;
 }
+/* ---------- live prices: NSE/BSE stocks (Yahoo Finance) and mutual fund NAVs (mfapi.in) ---------- */
+const LIVE_TYPES = {"Stocks":"yf", "Mutual funds":"mf"};
+const pendingFetch = {};
+window.__nativeFetchDone = (id, code, body) => {
+  const p = pendingFetch[id]; if (!p) return; delete pendingFetch[id];
+  if (code >= 200 && code < 300 && body != null){ try { p.res(JSON.parse(body)); } catch(e){ p.rej(e); } }
+  else p.rej(new Error(code ? "HTTP " + code : "No connection"));
+};
+function getJSON(url){
+  if (bridge && typeof bridge.fetch === "function") return new Promise((res, rej) => {
+    const id = newId(); pendingFetch[id] = {res, rej};
+    setTimeout(() => { if (pendingFetch[id]){ delete pendingFetch[id]; rej(new Error("Timed out")); } }, 20000);
+    try { bridge.fetch(id, url); } catch(e){ delete pendingFetch[id]; rej(e); }
+  });
+  return fetch(url).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+}
+async function searchLive(src, q){
+  if (src==="mf"){
+    const j = await getJSON(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(q)}`);
+    return (Array.isArray(j) ? j : []).slice(0, 20).map(x => ({src:"mf", id:String(x.schemeCode), label:x.schemeName, sub:`Scheme ${x.schemeCode}`}));
+  }
+  const j = await getJSON(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=15&newsCount=0`);
+  return ((j && j.quotes) || []).filter(x => /\.(NS|BO)$/.test(x.symbol||"") && ["EQUITY","ETF","MUTUALFUND"].includes(x.quoteType))
+    .map(x => ({src:"yf", id:x.symbol, label:x.longname || x.shortname || x.symbol, sub:`${x.symbol} · ${/\.NS$/.test(x.symbol) ? "NSE" : "BSE"}`}));
+}
+async function quoteLive(src, id){
+  if (src==="mf"){
+    const j = await getJSON(`https://api.mfapi.in/mf/${encodeURIComponent(id)}/latest`);
+    const d = j && j.data && j.data[0]; const price = d ? parseFloat(d.nav) : NaN;
+    if (!isFinite(price)) throw new Error("No NAV");
+    return {price, prev:null, asOf: d.date ? `NAV of ${d.date}` : ""};
+  }
+  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(id)}?range=5d&interval=1d`);
+  const m = j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta;
+  const price = m ? Number(m.regularMarketPrice) : NaN;
+  if (!isFinite(price)) throw new Error("No price");
+  const t = m.regularMarketTime ? new Date(m.regularMarketTime*1000) : null;
+  return {price, prev: Number(m.chartPreviousClose ?? m.previousClose) || null, asOf: t ? `${t.getDate()} ${MON[t.getMonth()]} ${pad(t.getHours())}:${pad(t.getMinutes())}` : ""};
+}
+const isLive = a => a && a.kind==="asset" && a.live && a.live.id;
+let refreshing = false;
+async function refreshPrices(force){
+  if (refreshing) return;
+  const list = byKind("asset").filter(([,a]) => isLive(a));
+  const stale = ([,a]) => force || !a.priceAt || Date.now() - a.priceAt > (a.live.src==="mf" ? 6*3600e3 : 20*60e3);
+  const todo = list.filter(stale); if (!todo.length) return;
+  refreshing = true; if (force) render();
+  let ok = 0, fail = 0;
+  await Promise.all(todo.map(async ([id,a]) => {
+    try {
+      const q = await quoteLive(a.live.src, a.live.id); const cur = state.items.get(id); if (!cur) return;
+      state.items.set(id, {...cur, price:q.price, prevClose:q.prev, priceAsOf:q.asOf, priceAt:Date.now(), value:(Number(cur.units)||0)*q.price, updated:Date.now()}); ok++;
+    } catch(e){ fail++; }
+  }));
+  refreshing = false;
+  afterChange("asset");
+  if (force) toast(fail ? (ok ? `Updated ${ok}, ${fail} failed. Try again later.` : "Couldn't get prices. Check your internet connection.") : "Prices updated");
+}
+function renderLiveResults(){
+  const box = document.getElementById("w-results"); if (!box) return;
+  const pick = state.wPick;
+  if (pick){ box.innerHTML = `<div class="notice" style="padding:10px 12px"><div class="main"><span class="small"><b>${esc(pick.label)}</b></span><span class="tiny muted">${esc(pick.sub)}</span></div><button type="button" class="del" data-act="live-clear">Change</button></div>`; return; }
+  if (state.wSearching){ box.innerHTML = `<span class="tiny muted">Searching…</span>`; return; }
+  if (state.wErr){ box.innerHTML = `<span class="tiny neg">${esc(state.wErr)}</span>`; return; }
+  const r = state.wResults || [];
+  box.innerHTML = r.length ? `<ul class="list" style="max-height:260px;overflow:auto">${r.map((x,i) => `<li class="entry" data-act="live-pick" data-i="${i}"><div class="main"><span class="title small">${esc(x.label)}</span><span class="meta">${esc(x.sub)}</span></div></li>`).join("")}</ul>` : "";
+}
+function liveFormText(){
+  const src = LIVE_TYPES[valOf("w-type")];
+  const unitsL = document.getElementById("w-units-l"), avgL = document.getElementById("w-avg-l");
+  if (unitsL) unitsL.firstChild.textContent = src==="mf" ? "Units" : "Quantity (shares)";
+  if (avgL) avgL.firstChild.textContent = src==="mf" ? "Average NAV ₹" : "Average buy price ₹";
+  const q = document.getElementById("w-q"); if (q) q.placeholder = src==="mf" ? "Search fund, e.g. Parag Parikh Flexi" : "Search stock, e.g. RELIANCE, TCS";
+  const wvw = document.getElementById("w-val-wrap");
+  if (wvw) wvw.hidden = !!(src && state.wPick);
+}
 function syncFormVisibility(){
-  const wt = document.getElementById("w-type"), wp = document.getElementById("w-p2p");
+  const wt = document.getElementById("w-type"), wp = document.getElementById("w-p2p"), wl = document.getElementById("w-live");
   if (wt && wp){ wp.hidden = wt.value!==P2P; if (!wp.hidden) p2pPreview(); }
+  if (wt && wl){ const src = LIVE_TYPES[wt.value]; wl.hidden = !src; if (state.wPick && state.wPick.src!==src) state.wPick = null; if (src){ renderLiveResults(); liveFormText(); } }
   const rep = document.getElementById("r-repeat");
   if (rep){ document.getElementById("r-date-wrap").hidden = rep.value!=="once"; document.getElementById("r-dom-wrap").hidden = rep.value!=="monthly"; }
 }
@@ -1269,7 +1346,16 @@ function renderWealth(){
     <div class="toggle2" role="group" aria-label="Kind"><button type="button" data-act="wmode" data-k="asset" aria-pressed="${!isL}">Asset</button><button type="button" data-act="wmode" data-k="liab" aria-pressed="${isL}">Loan / due</button></div>
     <input class="field" id="w-name" maxlength="60" placeholder="${isL ? "Name, e.g. HDFC credit card" : "Name, e.g. SBI savings, Nifty index fund"}" aria-label="Name">
     <div class="grid2"><select class="field" id="w-type" data-live="1" aria-label="Type">${(isL?LIAB_TYPES:ASSET_TYPES).map(t=>`<option ${!isL && t===state.wType ? "selected" : ""}>${t}</option>`).join("")}</select>
-      <input class="field" id="w-val" inputmode="decimal" placeholder="${isL?"Amount owed ₹":state.wType===P2P?"Amount lent ₹":"Current value ₹"}" aria-label="Value in rupees"></div>
+      <div id="w-val-wrap"><input class="field" id="w-val" inputmode="decimal" placeholder="${isL?"Amount owed ₹":state.wType===P2P?"Amount lent ₹":"Current value ₹"}" aria-label="Value in rupees"></div></div>
+    ${isL ? "" : `<div class="stack" id="w-live" hidden>
+      <span class="flabel">Live price <span>Pick the stock or fund, and LifeOS keeps its value at today's price.</span></span>
+      <div class="inline" style="flex-wrap:nowrap"><input class="field" id="w-q" data-live="1" style="flex:1" placeholder="Search"><button type="button" class="btn ghost" data-act="live-search">Search</button></div>
+      <div id="w-results"></div>
+      <div class="grid2">
+        <label class="flabel" for="w-units" id="w-units-l">Quantity<input class="field" id="w-units" inputmode="decimal" placeholder="e.g. 10"></label>
+        <label class="flabel" for="w-avg" id="w-avg-l">Average buy price ₹<input class="field" id="w-avg" inputmode="decimal" placeholder="Optional"></label>
+      </div>
+    </div>`}
     ${isL ? "" : `<div class="stack" id="w-p2p" hidden>
       <div class="grid2">
         <label class="flabel" for="w-rate">Interest % a year<input class="field" id="w-rate" inputmode="decimal" value="35"></label>
@@ -1286,7 +1372,7 @@ function renderWealth(){
     <button class="btn block" type="submit">Add ${isL?"loan":"asset"}</button>
   </form>
 
-  ${assets.length ? `<div class="sub">Assets</div><ul class="list">${assets.map(([id,a]) => wealthRow(id,a,false)).join("")}</ul>` : ""}
+  ${assets.length ? `<div class="between"><span class="sub">Assets</span>${assets.some(([,a]) => isLive(a)) ? `<button class="del" data-act="refresh-prices" ${refreshing ? "disabled" : ""}>${refreshing ? "Updating…" : "Refresh prices"}</button>` : ""}</div><ul class="list">${assets.map(([id,a]) => wealthRow(id,a,false)).join("")}</ul>` : ""}
   ${liabs.length ? `<div class="sub">Loans &amp; dues</div><ul class="list">${liabs.map(([id,a]) => wealthRow(id,a,true)).join("")}</ul>` : ""}
   ${!assets.length && !liabs.length ? `<div class="empty"><p>Add your bank balance, investments, gold and any loans. LifeOS works out your net worth and tracks it every month.</p></div>` : ""}
 
@@ -1331,8 +1417,28 @@ function p2pRow(id, a){
     </details>
   </li>`;
 }
+function holdingRow(id, a){
+  const units = Number(a.units)||0, price = Number(a.price)||0, value = units*price, avg = Number(a.avg)||0, inv = units*avg;
+  const gain = avg ? value - inv : null, day = a.prevClose ? (price - a.prevClose)/a.prevClose*100 : null;
+  const mf = a.live.src==="mf";
+  return `<li style="flex-direction:column;align-items:stretch;gap:8px">
+    <div class="row"><span class="cat inc">${mf ? "MF" : "ST"}</span>
+      <div class="main"><span class="title">${esc(a.name)}</span><span class="meta">${esc(mf ? `Scheme ${a.live.id}` : a.live.id)} · ${units.toLocaleString("en-IN")} ${mf ? "units" : "shares"}</span></div>
+      <span class="amt">${price ? inr(value) : "–"}</span>${delBtn(id)}</div>
+    <div class="between small"><span class="muted">${price ? `${mf ? "NAV" : "Price"} ₹${price.toLocaleString("en-IN",{maximumFractionDigits:2})}${day!==null ? ` <span class="${day>=0?"pos":"neg"}">${day>=0?"+":""}${day.toFixed(2)}% today</span>` : ""}` : "Price not loaded yet. Tap Refresh prices."}</span>
+      <span class="tiny muted">${a.priceAsOf ? esc(a.priceAsOf) : ""}</span></div>
+    ${gain!==null && price ? `<div class="between small"><span class="muted">Invested ${inr(inv)}</span><span class="${gain>=0?"pos":"neg"}"><b>${gain>=0?"+":"−"}${inr(gain)}</b> (${inv ? (gain/inv*100).toFixed(1) : 0}%)</span></div>` : ""}
+    <details class="winbox" id="hd-${id}"><summary>Edit holding</summary>
+      <div class="grid2">
+        <label class="flabel" for="hu-${id}">${mf ? "Units" : "Quantity"}<input class="field" id="hu-${id}" data-hold="units" data-hid="${id}" inputmode="decimal" value="${units}"></label>
+        <label class="flabel" for="ha-${id}">${mf ? "Average NAV ₹" : "Average buy price ₹"}<input class="field" id="ha-${id}" data-hold="avg" data-hid="${id}" inputmode="decimal" value="${avg || ""}" placeholder="Optional"></label>
+      </div>
+    </details>
+  </li>`;
+}
 function wealthRow(id, a, isL){
   if (!isL && isP2P(a)) return p2pRow(id, a);
+  if (!isL && isLive(a)) return holdingRow(id, a);
   const upd = a.updated ? new Date(a.updated) : null;
   return `<li><span class="cat ${isL?"":"inc"}">${initials(a.type)}</span>
     <div class="main"><span class="title">${esc(a.name)}</span><span class="meta">${esc(a.type)}${upd?` · updated ${upd.getDate()} ${MON[upd.getMonth()]}`:""}</span></div>
@@ -1483,7 +1589,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id, it = id ? state.items.get(id) : null;
   if (act==="go"){ go(b.dataset.tab, {plan:b.dataset.plan, money:b.dataset.money, more:b.dataset.more, goals:b.dataset.goals}); return; }
-  if (act==="plan" || act==="money" || act==="more" || act==="goals"){ state[act] = b.dataset.k; saveView(); render(); return; }
+  if (act==="plan" || act==="money" || act==="more" || act==="goals"){ state[act] = b.dataset.k; saveView(); render(); if (act==="money" && b.dataset.k==="wealth") refreshPrices(false); return; }
   if (act==="area"){ state.area = b.dataset.k; render(); return; }
   if (act==="gmode"){ const t = document.getElementById("g-title"); state.goalTitle = t ? t.value : ""; state.goalMode = b.dataset.k; render(); return; }
   if (act==="area-goal"){ state.goalArea = b.dataset.k; state.goalMode = b.dataset.k==="wealth" ? "money" : "progress"; state.goalTitle = ""; go("goals", {goals:"list"}); setTimeout(()=>{ const t = document.getElementById("g-title"); t && t.focus(); }, 50); return; }
@@ -1516,6 +1622,22 @@ document.addEventListener("click", e => {
     updateItem(id, {value: Math.max(0, value), p2pLog:plog, addLog:alog, updated:Date.now()});
     return;
   }
+  if (act==="live-search"){
+    const src = LIVE_TYPES[valOf("w-type")], q = valOf("w-q").trim();
+    if (!src) return; if (q.length < 2){ toast("Type at least 2 letters."); return; }
+    state.wPick = null; state.wSearching = true; state.wErr = ""; state.wResults = []; renderLiveResults();
+    searchLive(src, q).then(r => { state.wResults = r; state.wErr = r.length ? "" : "No matches. Try another spelling."; })
+      .catch(() => { state.wErr = "Couldn't search. Check your internet connection."; })
+      .finally(() => { state.wSearching = false; renderLiveResults(); });
+    return;
+  }
+  if (act==="live-pick"){
+    const x = (state.wResults||[])[Number(b.dataset.i)]; if (!x) return;
+    state.wPick = x; const n = document.getElementById("w-name"); if (n && !n.value.trim()) n.value = x.label;
+    renderLiveResults(); liveFormText(); return;
+  }
+  if (act==="live-clear"){ state.wPick = null; renderLiveResults(); liveFormText(); return; }
+  if (act==="refresh-prices"){ refreshPrices(true); return; }
   if (act==="plan-contrib" && it){
     const m = moneyOf(it);
     if (m.thisMonth >= m.needed){ toast(`Already put aside ${inr(m.thisMonth)} this month. Change it in ${it.kind==="yearly" ? "the Yearly tab" : "Goals"}.`); return; }
@@ -1673,8 +1795,15 @@ document.addEventListener("change", e => {
     const cb = {...(settings().catBudgets||{})}; if (v) cb[t.dataset.cat] = v; else delete cb[t.dataset.cat];
     saveSettings({catBudgets:cb}, true); toast(v ? `${t.dataset.cat} limit: ${inr(v)}` : `${t.dataset.cat}: no limit`);
   }
-  if (t.id==="w-type"){ state.wType = t.value; const wv = document.getElementById("w-val"); if (wv) wv.placeholder = t.value===P2P ? "Amount lent ₹" : "Current value ₹"; syncFormVisibility(); }
+  if (t.id==="w-type"){ state.wType = t.value; state.wResults = []; state.wErr = ""; const wv = document.getElementById("w-val"); if (wv) wv.placeholder = t.value===P2P ? "Amount lent ₹" : "Current value ₹"; syncFormVisibility(); }
   if (t.id==="w-reinvest") p2pPreview();
+  if (t.dataset.hold){
+    const it = state.items.get(t.dataset.hid); if (!it) return;
+    const v = t.value.trim()==="" ? 0 : num(t.value);
+    if (!isFinite(v) || v < 0 || (t.dataset.hold==="units" && v===0)){ toast("Enter a number."); return; }
+    const patch = {[t.dataset.hold]: v}; if (t.dataset.hold==="units") patch.value = v*(Number(it.price)||0);
+    updateItem(t.dataset.hid, patch); toast("Saved"); return;
+  }
   if (t.dataset.p2p){
     const it = state.items.get(t.dataset.pid); if (!it) return;
     const k = t.dataset.p2p;
@@ -1750,6 +1879,17 @@ document.addEventListener("submit", e => {
     if (!isFinite(v) || v < 0){ toast("Enter the budget in rupees."); return; }
     saveSettings({budget:v}); toast(v ? `Budget set to ${inr(v)}` : "Budget removed");
   }
+  if (f.id==="w-form" && !state.liabMode && LIVE_TYPES[val("w-type")] && state.wPick){
+    const pick = state.wPick, units = num(val("w-units")), avg = val("w-avg").trim() ? num(val("w-avg")) : 0;
+    if (!isFinite(units) || units <= 0){ toast(pick.src==="mf" ? "Enter the number of units." : "Enter how many shares you hold."); return; }
+    if (!isFinite(avg) || avg < 0){ toast("Average price must be a number."); return; }
+    const name = val("w-name").trim() || pick.label, id = newId();
+    clear("w-name","w-units","w-avg","w-q"); state.wPick = null; state.wResults = [];
+    setItem(id, {kind:"asset", type:val("w-type"), name, live:{src:pick.src, id:pick.id}, units, avg, value:0, created:Date.now(), updated:Date.now()});
+    toast("Added · getting the latest price…");
+    refreshPrices(true);
+    return;
+  }
   if (f.id==="w-form"){
     const name = val("w-name").trim(), v = num(val("w-val"));
     if (!name){ toast("Give it a name."); return; }
@@ -1817,6 +1957,7 @@ if (state.items.size && byKind("asset").length + byKind("liability").length) { s
 syncReminders();
 render();
 checkUpdate(false);
+refreshPrices(false);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) maybeCheckUpdate(); });
 })();
 </script>

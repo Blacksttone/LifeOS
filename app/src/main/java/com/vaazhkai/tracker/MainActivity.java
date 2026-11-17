@@ -75,6 +75,11 @@ public class MainActivity extends Activity {
         ReminderScheduler.scheduleAll(this);
     }
 
+    /** Runs a script in the page from any thread. */
+    void runJs(final String js) {
+        runOnUiThread(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+
     void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
