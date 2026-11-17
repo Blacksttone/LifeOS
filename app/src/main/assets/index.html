@@ -29,7 +29,7 @@ button{cursor:pointer}
 .topbar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
 .topbar .in{max-width:760px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
-.logo{width:34px;height:34px;border-radius:10px;background:#0f1b2d;display:grid;place-items:center;flex:none;overflow:hidden}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#2f6fe4,#1747a6);display:grid;place-items:center;flex:none;overflow:hidden}
 .logo svg{width:34px;height:34px}
 .brand h1{font-size:19px;font-weight:800}
 .brand small{display:block;color:var(--muted);font-size:12px;font-family:var(--body);font-weight:500;letter-spacing:0}
@@ -198,7 +198,7 @@ ul.list li.editor{flex-direction:column;align-items:stretch;gap:10px;background:
 <body>
 <header class="topbar"><div class="in">
   <div class="brand">
-    <div class="logo"><svg viewBox="0 0 108 108" aria-hidden="true"><path d="M33.6 36.4V71.6H48" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="62.4" cy="58.8" r="12" fill="none" stroke="#3b82f6" stroke-width="9"/><circle cx="62.4" cy="58.8" r="3.6" fill="#7ee0b0"/></svg></div>
+    <div class="logo"><svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="27" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="7"/><path d="M54 27A27 27 0 1 1 29.5 66" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M40 62L50 52L57 58L69 45M62 45H69V52" fill="none" stroke="#7ee0b0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div><h1>LifeOS</h1><small id="today"></small></div>
   </div>
   <button class="iconbtn" data-act="go" data-tab="more" data-more="reminders" aria-label="Reminders">

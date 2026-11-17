@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- LifeOS "LO" monogram, kept inside the adaptive-icon safe zone. -->
+<!-- LifeOS "growth ring": progress ring with a rising arrow, inside the adaptive-icon safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="7.2"
+    <path android:fillColor="#00000000" android:strokeColor="#47FFFFFF" android:strokeWidth="6"
+        android:pathData="M27,54 a27,27 0 1,0 54,0 a27,27 0 1,0 -54,0" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:pathData="M54,27 A27,27 0 1,1 29.5,66" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF7EE0B0" android:strokeWidth="6"
         android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M33.6,36.4 L33.6,71.6 L48,71.6" />
-    <path android:fillColor="#00000000" android:strokeColor="#FF3B82F6" android:strokeWidth="7.2"
-        android:pathData="M50.4,58.8 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
-    <path android:fillColor="#FF7EE0B0"
-        android:pathData="M59.2,58.8 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+        android:pathData="M40,62 L50,52 L57,58 L69,45 M62,45 L69,45 L69,52" />
 </vector>
