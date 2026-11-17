@@ -21,6 +21,7 @@ import androidx.webkit.WebViewAssetLoader;
 public class MainActivity extends Activity {
     static final String HOST = "appassets.androidplatform.net";
     private WebView web;
+    final BackupFiles backups = new BackupFiles(this);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,6 +93,11 @@ public class MainActivity extends Activity {
             return checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
         }
         return true;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (!backups.onResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override

@@ -12,6 +12,28 @@ public class Bridge {
     @JavascriptInterface
     public boolean isApp() { return true; }
 
+    /* Backup to a file (Google Drive or anywhere the system picker offers). */
+    @JavascriptInterface
+    public void backupPick(String json, String name) { activity.backups.pickAndSave(json, name); }
+
+    @JavascriptInterface
+    public void backupSave(String json) { activity.backups.saveAgain(json); }
+
+    @JavascriptInterface
+    public String backupFileName() { return activity.backups.savedName(); }
+
+    @JavascriptInterface
+    public boolean hasBackupFile() { return activity.backups.savedUri() != null; }
+
+    @JavascriptInterface
+    public void backupForget() { activity.backups.forget(); }
+
+    @JavascriptInterface
+    public void restorePick() { activity.backups.pickAndRestore(); }
+
+    @JavascriptInterface
+    public void restoreSaved() { activity.backups.restoreSaved(); }
+
     /**
      * Fetches JSON for live prices outside the WebView, so sites without CORS headers work.
      * Only the price sources the app uses are allowed. The answer arrives as

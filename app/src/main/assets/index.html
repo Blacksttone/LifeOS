@@ -1630,19 +1630,81 @@ function renderReminders(){
         ${delBtn(id)}</li>`;
     }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}`;
 }
+/* ---------- backup to a file: Google Drive via the system picker ---------- */
+const BK_LAST = "lifeos-backup-at", BK_AUTO = "lifeos-backup-auto";
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch(e){} };
+const canFileBackup = () => !!(bridge && typeof bridge.backupPick === "function");
+const backupJSON = () => JSON.stringify({app:"lifeos", version:2, exported:new Date().toISOString(), items:Object.fromEntries(state.items)});
+const backupName = "LifeOS-backup.json";
+function fileBackupInfo(){ try { return bridge.hasBackupFile() ? (bridge.backupFileName() || backupName) : ""; } catch(e){ return ""; } }
+let backupSilent = false;
+window.__backupDone = (ok, name, msg) => {
+  if (ok){ lsSet(BK_LAST, String(Date.now())); if (lsGet(BK_AUTO, null) === null) lsSet(BK_AUTO, "1"); }
+  if (!backupSilent || !ok){ if (msg !== "cancelled") toast(ok ? `Backed up to ${name || "your file"}` : (msg || "Backup failed")); }
+  backupSilent = false; state.backupBusy = false; render();
+};
+window.__restoreData = (text, name, msg) => {
+  state.backupBusy = false;
+  if (text == null){ if (msg !== "cancelled") toast(msg || "Couldn't read the file"); render(); return; }
+  state.pendingRestore = {text, name}; render(); window.scrollTo(0, 0);
+};
+function importBackup(text){
+  const data = JSON.parse(text);
+  if (!data || !["lifeos","vaazhkai-tracker"].includes(data.app) || typeof data.items !== "object") throw new Error("not a backup");
+  let n = 0;
+  for (const [k,v] of Object.entries(data.items)) if (v && typeof v==="object" && typeof v.kind==="string"){ state.items.set(k,v); n++; }
+  state.jdraft = null; afterChange("*");
+  return {n, when: data.exported ? new Date(data.exported) : null};
+}
+function autoBackup(){
+  if (!canFileBackup() || lsGet(BK_AUTO, "1") !== "1" || !fileBackupInfo()) return;
+  const last = Number(lsGet(BK_LAST, 0));
+  if (dayKey(new Date(last)) === dayKey(new Date())) return;
+  backupSilent = true; try { bridge.backupSave(backupJSON()); } catch(e){ backupSilent = false; }
+}
 function renderBackup(){
-  return `<div class="card">
-    <h3>Your data stays on this phone</h3>
-    <span class="small muted">Uninstalling LifeOS or clearing its data deletes everything. Make a backup regularly: share it to WhatsApp (to yourself), Google Drive or email.</span>
-    <button class="btn" data-act="export">${bridge ? "Share backup" : "Copy backup"}</button>
+  const file = canFileBackup() ? fileBackupInfo() : "", last = Number(lsGet(BK_LAST, 0)), auto = lsGet(BK_AUTO, "1") === "1";
+  const pr = state.pendingRestore;
+  let prInfo = "";
+  if (pr){ try { const d = JSON.parse(pr.text); const n = Object.keys(d.items||{}).length, w = d.exported ? new Date(d.exported) : null;
+      prInfo = `${n} items${w ? `, saved ${w.getDate()} ${MON[w.getMonth()]} ${w.getFullYear()} ${pad(w.getHours())}:${pad(w.getMinutes())}` : ""}`; }
+    catch(e){ prInfo = "This file isn't a LifeOS backup."; } }
+  const lastTxt = last ? (() => { const d = new Date(last); return `${d.getDate()} ${MON[d.getMonth()]}, ${pad(d.getHours())}:${pad(d.getMinutes())}`; })() : "";
+  return `${pr ? `<div class="card" style="border-color:var(--blue)">
+      <h3>Restore this backup?</h3>
+      <span class="small"><b>${esc(pr.name || "Backup file")}</b> · ${esc(prInfo)}</span>
+      <span class="small muted">Items in the backup replace the same items on this phone. Anything added after the backup stays.</span>
+      <div class="grid2"><button class="btn ghost" data-act="restore-cancel">Cancel</button><button class="btn" data-act="restore-confirm">Restore</button></div>
+    </div>` : ""}
+  ${canFileBackup() ? `<div class="card">
+    <h3>Google Drive backup</h3>
+    ${file ? `<div class="notice" style="padding:10px 12px"><div class="main"><span class="small"><b>${esc(file)}</b></span><span class="tiny muted">${lastTxt ? `Last backup ${lastTxt}` : "Not backed up yet"}</span></div></div>
+      <div class="grid2"><button class="btn" data-act="backup-now" ${state.backupBusy ? "disabled" : ""}>${state.backupBusy ? "Saving…" : "Back up now"}</button><button class="btn ghost" data-act="backup-pick">Change location</button></div>
+      <label class="checkline" for="bk-auto"><input type="checkbox" id="bk-auto" data-live="1" ${auto ? "checked" : ""}> Back up automatically once a day</label>`
+    : `<span class="small muted">Save your data as a file in Google Drive, so you can get it back on a new phone or after reinstalling.</span>
+      <ol class="small" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+        <li>Tap <b>Back up to Google Drive</b>.</li>
+        <li>In the menu (☰), pick <b>Drive</b>.</li>
+        <li>Tap ⋮ → <b>New folder</b>, name it <b>LifeOS Backups</b>, open it.</li>
+        <li>Tap <b>Save</b>. Next time LifeOS saves to the same file by itself.</li>
+      </ol>
+      <button class="btn block" data-act="backup-pick">Back up to Google Drive</button>`}
   </div>
   <div class="card">
     <h3>Restore</h3>
-    <label class="flabel" for="b-in">Paste the backup text <span>Items with the same id are replaced; everything else is kept.</span>
-      <textarea class="field" id="b-in" style="min-height:110px" placeholder='{"app":"lifeos",...}'></textarea></label>
-    <button class="btn ghost" data-act="import">Restore backup</button>
-    <span class="tiny muted">${state.items.size} items stored on this phone</span>
-  </div>`;
+    <span class="small muted">Pick your LifeOS-backup.json from Google Drive (LifeOS Backups folder).</span>
+    <div class="grid2">${file ? `<button class="btn ghost" data-act="restore-saved">Restore last backup</button>` : ""}<button class="btn ghost ${file ? "" : "block"}" data-act="restore-pick" ${file ? "" : 'style="grid-column:1/-1"'}>Restore from file</button></div>
+  </div>` : ""}
+  <details class="winbox" id="bk-manual"><summary>Share or paste backup text</summary>
+    <div class="stack" style="margin-top:4px">
+      <button class="btn ghost" data-act="export">${bridge ? "Share backup" : "Copy backup"}</button>
+      <label class="flabel" for="b-in">Paste the backup text <span>Items with the same id are replaced; everything else is kept.</span>
+        <textarea class="field" id="b-in" style="min-height:110px" placeholder='{"app":"lifeos",...}'></textarea></label>
+      <button class="btn ghost" data-act="import">Restore pasted text</button>
+    </div>
+  </details>
+  <span class="tiny muted">${state.items.size} items stored on this phone. Uninstalling LifeOS or clearing its data deletes them, so keep a backup.</span>`;
 }
 
 /* ---------- actions ---------- */
@@ -1824,13 +1886,18 @@ document.addEventListener("click", e => {
     else if (navigator.clipboard) navigator.clipboard.writeText(text).then(()=>toast("Backup copied"), ()=>toast("Couldn't copy. Try again."));
   }
   if (act==="import"){
-    try {
-      const data = JSON.parse(document.getElementById("b-in").value.trim());
-      if (!data || !["lifeos","vaazhkai-tracker"].includes(data.app) || typeof data.items!=="object") throw new Error();
-      let n = 0;
-      for (const [k,v] of Object.entries(data.items)) if (v && typeof v==="object" && typeof v.kind==="string"){ state.items.set(k,v); n++; }
-      state.jdraft = null; afterChange("*"); toast(`Restored ${n} items`);
-    } catch(_){ toast("That isn't a LifeOS backup. Paste the full backup text."); }
+    try { const r = importBackup(document.getElementById("b-in").value.trim()); toast(`Restored ${r.n} items`); }
+    catch(_){ toast("That isn't a LifeOS backup. Paste the full backup text."); }
+  }
+  if (act==="backup-pick"){ try { bridge.backupPick(backupJSON(), backupName); } catch(_){ toast("Update the app to back up to Google Drive."); } return; }
+  if (act==="backup-now"){ state.backupBusy = true; render(); try { bridge.backupSave(backupJSON()); } catch(_){ state.backupBusy = false; render(); } return; }
+  if (act==="restore-pick"){ try { bridge.restorePick(); } catch(_){} return; }
+  if (act==="restore-saved"){ try { bridge.restoreSaved(); } catch(_){} return; }
+  if (act==="restore-cancel"){ state.pendingRestore = null; render(); return; }
+  if (act==="restore-confirm" && state.pendingRestore){
+    try { const r = importBackup(state.pendingRestore.text); state.pendingRestore = null; toast(`Restored ${r.n} items`); }
+    catch(_){ state.pendingRestore = null; render(); toast("That file isn't a LifeOS backup."); }
+    return;
   }
 });
 
@@ -1868,6 +1935,7 @@ document.addEventListener("change", e => {
   }
   if (t.id==="w-type"){ state.wType = t.value; state.wResults = []; state.wErr = ""; const wv = document.getElementById("w-val"); if (wv) wv.placeholder = t.value===P2P ? "Amount lent ₹" : "Current value ₹"; syncFormVisibility(); }
   if (t.id==="w-reinvest") p2pPreview();
+  if (t.id==="bk-auto"){ lsSet(BK_AUTO, t.checked ? "1" : "0"); toast(t.checked ? "Daily backup on" : "Daily backup off"); return; }
   if (t.dataset.hold){
     const it = state.items.get(t.dataset.hid); if (!it) return;
     const v = t.value.trim()==="" ? 0 : num(t.value);
@@ -2029,6 +2097,7 @@ syncReminders();
 render();
 checkUpdate(false);
 refreshPrices(false);
+setTimeout(autoBackup, 3000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) maybeCheckUpdate(); });
 })();
 </script>
