@@ -637,6 +637,7 @@ function render(){
   for (const [id,v] of Object.entries(liveVals)){ const el = main.querySelector("#"+CSS.escape(id)); if (el){ if (el.type==="checkbox") el.checked = v; else el.value = v; } }
   syncFormVisibility();
   calcMonthly("nw"); calcMonthly("ed");
+  main.querySelectorAll("details[data-chart]").forEach(d => { if (d.open) drawChart(d.dataset.chart); });
   if (focusId){ const el = main.querySelector("#"+CSS.escape(focusId)); el && el.focus(); }
 }
 /* ---------- P2P lending (LenDenClub): monthly interest, reinvested, plus monthly top-ups ---------- */
@@ -705,6 +706,71 @@ async function quoteLive(src, id){
   if (!isFinite(price)) throw new Error("No price");
   const t = m.regularMarketTime ? new Date(m.regularMarketTime*1000) : null;
   return {price, prev: Number(m.chartPreviousClose ?? m.previousClose) || null, asOf: t ? `${t.getDate()} ${MON[t.getMonth()]} ${pad(t.getHours())}:${pad(t.getMinutes())}` : ""};
+}
+const RANGES = {"1M":{yf:"1mo", iv:"1d", days:31}, "6M":{yf:"6mo", iv:"1d", days:183}, "1Y":{yf:"1y", iv:"1d", days:366}, "5Y":{yf:"5y", iv:"1wk", days:1827}};
+async function historyLive(src, id, range){
+  const R = RANGES[range];
+  if (src==="mf"){
+    const j = await getJSON(`https://api.mfapi.in/mf/${encodeURIComponent(id)}`);
+    const cutoff = Date.now() - R.days*864e5;
+    const pts = ((j && j.data) || []).map(d => { const [dd,mm,yy] = String(d.date).split("-").map(Number); return {t: new Date(yy, mm-1, dd).getTime(), v: parseFloat(d.nav)}; })
+      .filter(x => isFinite(x.v) && x.t >= cutoff).sort((a,b) => a.t - b.t);
+    // keep the chart light: at most ~260 points
+    const step = Math.max(1, Math.ceil(pts.length/260));
+    return pts.filter((_,i) => i % step === 0 || i === pts.length-1);
+  }
+  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(id)}?range=${R.yf}&interval=${R.iv}`);
+  const r = j && j.chart && j.chart.result && j.chart.result[0];
+  const ts = (r && r.timestamp) || [], cl = (r && r.indicators && r.indicators.quote && r.indicators.quote[0] && r.indicators.quote[0].close) || [];
+  return ts.map((t,i) => ({t: t*1000, v: Number(cl[i])})).filter(x => isFinite(x.v) && x.v > 0);
+}
+const charts = {};
+function priceChart(pts, avg){
+  const W = 320, H = 150, top = 14, bottom = 22, left = 4, right = 4;
+  const vs = pts.map(p => p.v).concat(avg ? [avg] : []);
+  let min = Math.min(...vs), max = Math.max(...vs); const pad0 = (max - min) * 0.08 || max * 0.02 || 1; min -= pad0; max += pad0;
+  const t0 = pts[0].t, t1 = pts[pts.length-1].t || t0 + 1;
+  const x = t => left + (W-left-right) * (t1===t0 ? 0.5 : (t - t0)/(t1 - t0));
+  const y = v => top + (H-top-bottom) * (1 - (v - min)/(max - min));
+  const up = pts[pts.length-1].v >= pts[0].v, col = up ? "var(--good)" : "var(--bad)";
+  const path = pts.map((p,i) => `${i?"L":"M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+  const area = `${path}L${x(t1).toFixed(1)},${H-bottom}L${x(t0).toFixed(1)},${H-bottom}Z`;
+  const fmtD = t => { const d = new Date(t); return `${d.getDate()} ${MON[d.getMonth()]}${t1 - t0 > 300*864e5 ? " " + yy(d.getFullYear()) : ""}`; };
+  const fmtV = v => "₹" + v.toLocaleString("en-IN", {maximumFractionDigits: v < 100 ? 2 : 0});
+  const hi = pts.reduce((a,b) => b.v > a.v ? b : a), lo = pts.reduce((a,b) => b.v < a.v ? b : a);
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Price chart">`;
+  svg += `<defs><linearGradient id="pg${up?"u":"d"}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${up ? "#11845a" : "#c4372f"}" stop-opacity=".18"/><stop offset="1" stop-color="${up ? "#11845a" : "#c4372f"}" stop-opacity="0"/></linearGradient></defs>`;
+  for (let i=0;i<=3;i++){ const gy = top + (H-top-bottom)*i/3; svg += `<line x1="${left}" x2="${W-right}" y1="${gy.toFixed(1)}" y2="${gy.toFixed(1)}" stroke="var(--line)" stroke-width="${i===3?1:.6}"/>`; }
+  svg += `<path d="${area}" fill="url(#pg${up?"u":"d"})"/><path d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`;
+  if (avg && avg > min && avg < max){ svg += `<line x1="${left}" x2="${W-right}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="var(--blue)" stroke-dasharray="4 4" stroke-width="1.2"/><text x="${W-right}" y="${(y(avg)-4).toFixed(1)}" text-anchor="end" style="fill:var(--blue)">Your avg ${fmtV(avg)}</text>`; }
+  svg += `<text x="${x(hi.t).toFixed(1)}" y="${(y(hi.v)-5).toFixed(1)}" text-anchor="${x(hi.t) > W*0.8 ? "end" : x(hi.t) < W*0.2 ? "start" : "middle"}">High ${fmtV(hi.v)}</text>`;
+  svg += `<text x="${x(lo.t).toFixed(1)}" y="${(y(lo.v)+12).toFixed(1)}" text-anchor="${x(lo.t) > W*0.8 ? "end" : x(lo.t) < W*0.2 ? "start" : "middle"}">Low ${fmtV(lo.v)}</text>`;
+  const last = pts[pts.length-1];
+  svg += `<circle cx="${x(last.t).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="3.5" fill="${col}" stroke="#fff" stroke-width="1.5"/>`;
+  svg += `<text x="${left}" y="${H-6}">${fmtD(t0)}</text><text x="${W-right}" y="${H-6}" text-anchor="end">${fmtD(t1)}</text>`;
+  return svg + `</svg>`;
+}
+function drawChart(id){
+  const box = document.getElementById("ch-"+id), a = state.items.get(id); if (!box || !a) return;
+  const range = (state.chartRange||{})[id] || "6M", c = charts[id+"|"+range];
+  const chips = Object.keys(RANGES).map(r => `<button type="button" data-act="chart-range" data-id="${id}" data-k="${r}" aria-pressed="${r===range}">${r}</button>`).join("");
+  let body;
+  if (!c || c.loading) body = `<div class="tiny muted" style="padding:40px 0;text-align:center">Loading chart…</div>`;
+  else if (c.err || !c.pts.length) body = `<div class="tiny neg" style="padding:30px 0;text-align:center">Couldn't load the chart. Check your internet connection. <button type="button" class="del" data-act="chart-range" data-id="${id}" data-k="${range}">Try again</button></div>`;
+  else {
+    const f = c.pts[0].v, l = c.pts[c.pts.length-1].v, ch = (l - f)/f*100;
+    body = `<div class="between small"><span class="muted">${range} change</span><b class="${ch>=0?"pos":"neg"}">${ch>=0?"+":""}${ch.toFixed(2)}%</b></div>${priceChart(c.pts, Number(a.avg)||0)}`;
+  }
+  box.innerHTML = `<div class="seg" role="group" style="margin-bottom:8px">${chips}</div>${body}`;
+}
+async function loadChart(id, force){
+  const a = state.items.get(id); if (!a || !isLive(a)) return;
+  const range = (state.chartRange||{})[id] || "6M", key = id+"|"+range, c = charts[key];
+  if (c && !force && (c.loading || (!c.err && Date.now() - c.at < 30*60e3))){ drawChart(id); return; }
+  charts[key] = {loading:true, pts:[]}; drawChart(id);
+  try { charts[key] = {pts: await historyLive(a.live.src, a.live.id, range), at: Date.now()}; }
+  catch(e){ charts[key] = {err:true, pts:[], at: Date.now()}; }
+  drawChart(id);
 }
 const isLive = a => a && a.kind==="asset" && a.live && a.live.id;
 let refreshing = false;
@@ -1428,6 +1494,7 @@ function holdingRow(id, a){
     <div class="between small"><span class="muted">${price ? `${mf ? "NAV" : "Price"} ₹${price.toLocaleString("en-IN",{maximumFractionDigits:2})}${day!==null ? ` <span class="${day>=0?"pos":"neg"}">${day>=0?"+":""}${day.toFixed(2)}% today</span>` : ""}` : "Price not loaded yet. Tap Refresh prices."}</span>
       <span class="tiny muted">${a.priceAsOf ? esc(a.priceAsOf) : ""}</span></div>
     ${gain!==null && price ? `<div class="between small"><span class="muted">Invested ${inr(inv)}</span><span class="${gain>=0?"pos":"neg"}"><b>${gain>=0?"+":"−"}${inr(gain)}</b> (${inv ? (gain/inv*100).toFixed(1) : 0}%)</span></div>` : ""}
+    <details class="winbox" id="hc-${id}" data-chart="${id}"><summary>Price chart</summary><div id="ch-${id}"></div></details>
     <details class="winbox" id="hd-${id}"><summary>Edit holding</summary>
       <div class="grid2">
         <label class="flabel" for="hu-${id}">${mf ? "Units" : "Quantity"}<input class="field" id="hu-${id}" data-hold="units" data-hid="${id}" inputmode="decimal" value="${units}"></label>
@@ -1638,6 +1705,7 @@ document.addEventListener("click", e => {
   }
   if (act==="live-clear"){ state.wPick = null; renderLiveResults(); liveFormText(); return; }
   if (act==="refresh-prices"){ refreshPrices(true); return; }
+  if (act==="chart-range"){ state.chartRange = {...(state.chartRange||{}), [id]: b.dataset.k}; loadChart(id, b.textContent==="Try again"); return; }
   if (act==="plan-contrib" && it){
     const m = moneyOf(it);
     if (m.thisMonth >= m.needed){ toast(`Already put aside ${inr(m.thisMonth)} this month. Change it in ${it.kind==="yearly" ? "the Yearly tab" : "Goals"}.`); return; }
@@ -1780,6 +1848,9 @@ document.addEventListener("input", e => {
   if (["w-val","w-rate","w-monthly","w-tenure"].includes(e.target.id)) p2pPreview();
   if (e.target.id==="w-freq") p2pPreview();
 });
+document.addEventListener("toggle", e => {
+  const d = e.target; if (d && d.dataset && d.dataset.chart && d.open) loadChart(d.dataset.chart);
+}, true);
 document.addEventListener("change", e => {
   const t = e.target;
   if (t.id==="r-repeat") syncFormVisibility();
