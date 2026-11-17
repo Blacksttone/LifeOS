@@ -17,4 +17,5 @@ phone and open it. The app tells you when a newer version is out.
 - UI: `app/src/main/assets/index.html` (single file, no build step)
 - Native: WebView shell, AlarmManager reminders, update check (`app/src/main/java/...`)
 - CI: `.github/workflows/build-apk.yml` builds and releases on every push to `main`.
-  It needs the `SIGNING_KEYSTORE_B64` repository secret (base64 of the signing keystore).
+  The signing keystore is committed encrypted (`app/signing.keystore.enc`);
+  CI decrypts it with the `SIGNING_KEY_PASSWORD` repository secret.
