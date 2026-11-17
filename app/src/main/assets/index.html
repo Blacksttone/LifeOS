@@ -537,6 +537,13 @@ function maybeCheckUpdate(){
   if (Date.now() - last > 6*3600e3 || state.update === null && last === 0) checkUpdate(false);
 }
 
+function yearlyPreview(){
+  const out = document.getElementById("nw-preview"); if (!out || !document.getElementById("nw-amt")) return;
+  const a = num(valOf("nw-amt")), sv = num(valOf("nw-saved")) || 0, r = readPeriod("nw");
+  if (!(isFinite(a) && a > 0) || r.err){ out.textContent = "Add an amount if this task needs money. LifeOS works out the monthly contribution for the period."; return; }
+  const m = moneyOf({kind:"yearly", amount:a, saved:sv, period:r.p, contrib:{}});
+  out.textContent = m.status==="done" ? "Already saved in full." : `${m.upcoming ? `From ${monthLabel(m.from)}: ` : ""}about ${inr(m.needed)} a month for ${m.monthsLeft} months, until ${monthLabel(r.p.to)}.`;
+}
 function goalPreview(){
   const out = document.getElementById("g-preview"), amtEl = document.getElementById("g-amt"); if (!out || !amtEl) return;
   const amount = num(amtEl.value), saved = num(valOf("g-saved")) || 0, by = valOf("g-by"), start = valOf("g-start");
@@ -690,7 +697,11 @@ function editorRow(id, it){
   return `<li class="editor">
     <label class="flabel" for="ed-title">Task<input class="field" id="ed-title" data-live="1" maxlength="140" value="${esc(it.title)}"></label>
     <label class="flabel" for="ed-area">Life area<select class="field" id="ed-area" data-live="1">${areaOptions(itemArea(it))}</select></label>
-    ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}` : ""}
+    ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}
+      <div class="grid2">
+        <label class="flabel" for="ed-amt">Amount ₹ <span>Optional</span><input class="field" id="ed-amt" data-live="1" inputmode="numeric" value="${Number(it.amount) > 0 ? Math.round(it.amount) : ""}" placeholder="No amount"></label>
+        <label class="flabel" for="ed-saved">Saved so far ₹<input class="field" id="ed-saved" data-live="1" inputmode="numeric" value="${Number(it.saved) > 0 ? Math.round(it.saved) : ""}" placeholder="0"></label>
+      </div>` : ""}
     <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button>
       <span class="inline"><button class="btn ghost" data-act="ed-cancel">Cancel</button><button class="btn" data-act="ed-save" data-id="${id}">Save</button></span></div>
   </li>`;
@@ -705,7 +716,10 @@ function renderPlan(){
     const done = list.filter(([,it]) => it.done).length, act = st.filter(s=>s.active).length, od = st.filter(s=>s.overdue).length, up = st.filter(s=>s.upcoming).length;
     head = list.length ? `<div class="card"><div class="between"><span class="mid">Long-range tasks</span><span class="chip">${done}/${list.length} done</span></div>
       ${bar(list.length ? done/list.length*100 : 0, "good")}
-      <span class="tiny muted">${act} in progress${up ? ` · ${up} upcoming` : ""}${od ? ` · <b class="neg">${od} overdue</b>` : ""}</span></div>` : "";
+      <span class="tiny muted">${act} in progress${up ? ` · ${up} upcoming` : ""}${od ? ` · <b class="neg">${od} overdue</b>` : ""}</span>
+      ${(() => { const ms = list.filter(([,it]) => hasMoney(it) && dueThisMonth(it)); if (!ms.length) return "";
+        const need = ms.reduce((t,[,it]) => t + moneyOf(it).needed, 0), put = ms.reduce((t,[,it]) => t + moneyOf(it).thisMonth, 0);
+        return `<div class="between small"><span>Contribution this month</span><span><span class="amt">${inr(put)}</span> <span class="muted">of ${inr(need)}</span></span></div>${bar(need ? put/need*100 : 100, put>=need ? "good" : "")}`; })()}</div>` : "";
   } else if (kd.period){
     const pi = periodInfo(kd.period, d), sm = planSummary(kd);
     head = `<div class="card"><div class="between"><span class="mid">${esc(pi.text)}</span><span class="chip">${sm.done}/${sm.total} done</span></div>
@@ -718,6 +732,11 @@ function renderPlan(){
         <input class="field" id="new-title" maxlength="140" placeholder="e.g. Full health checkup, buy a bike, clear loan" aria-label="Task">
         <select class="field" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
         ${periodInputs("nw", null, false)}
+        <div class="grid2">
+          <label class="flabel" for="nw-amt">Amount ₹ <span>Optional</span><input class="field" id="nw-amt" inputmode="numeric" placeholder="e.g. 100000"></label>
+          <label class="flabel" for="nw-saved">Saved so far ₹ <span>Optional</span><input class="field" id="nw-saved" inputmode="numeric" placeholder="0"></label>
+        </div>
+        <span class="tiny muted" id="nw-preview">Add an amount if this task needs money. LifeOS works out the monthly contribution for the period.</span>
         <button class="btn block" type="submit">Add task</button></form>`
     : `<form class="inline" id="add-form" autocomplete="off">
         <input class="field" id="new-title" maxlength="140" placeholder="${esc(kd.placeholder)}" aria-label="${esc(kd.placeholder)}">
@@ -762,8 +781,23 @@ function yearlyRow(id, it){
     <button class="check" data-act="todo" data-id="${id}" aria-pressed="${!!it.done}" aria-label="Mark ${esc(it.title)} ${it.done?"not done":"done"}">${CHECK}</button>
     <div class="main"><span class="title">${esc(it.title)}</span>
       <span class="meta"><span class="wintime">${esc(periodLabel(it.period))}</span><span class="chip ${st.cls}">${esc(st.text)}</span><span>${areaOf(itemArea(it)).label}</span></span>
-      ${!it.done && st.active ? `<div class="bar ${st.cls==="warn"?"warn":""}" style="height:4px;margin-top:4px" title="Time used"><i style="width:${Math.round(st.pct)}%"></i></div>` : ""}</div>
+      ${!it.done && st.active ? `<div class="bar ${st.cls==="warn"?"warn":""}" style="height:4px;margin-top:4px" title="Time used"><i style="width:${Math.round(st.pct)}%"></i></div>` : ""}
+      ${hasMoney(it) ? yearlyMoney(id, it) : ""}</div>
     ${editBtn(id)}</li>`;
+}
+function yearlyMoney(id, it){
+  const m = moneyOf(it);
+  let dots = ""; for (let i=5;i>=0;i--){ const k = monthKey(shift("month", state.now, i)); dots += `<i class="${(it.contrib||{})[k] > 0 ? "on" : ""}" title="${monthLabel(k)}"></i>`; }
+  const chip = {done:`<span class="chip good">Amount reached</span>`, ontrack:`<span class="chip good">On track</span>`, behind:`<span class="chip warn">Behind</span>`, overdue:`<span class="chip bad">Past period</span>`, upcoming:""}[m.status];
+  return `<div class="mini" style="margin-top:8px">
+      <div class="between small"><span><span class="amt">${inr(m.saved)}</span> <span class="muted">of ${inr(m.amount)}</span></span><span class="inline">${chip}<span class="muted">${Math.round(m.pct)}%</span></span></div>
+      ${bar(m.pct, m.status==="done" ? "good" : "")}
+    </div>
+    ${m.status!=="done" && !it.done ? `<div class="notice" style="padding:10px 12px;margin-top:6px"><div class="main">
+        <span class="small">${m.status==="overdue" ? `Period is over. ${inr(m.amount - m.saved)} still to go.` : `${m.upcoming ? `From ${monthLabel(m.from)}, put` : "Put"} aside <b>${inr(m.needed)}</b> a month for ${m.monthsLeft} month${m.monthsLeft>1?"s":""}`}</span>
+        <span class="tiny muted">${m.upcoming ? (startNowNeeded({...it, start: it.period.from, by: it.period.to}) < m.needed ? `Start this month instead: ${inr(startNowNeeded({...it, start: it.period.from, by: it.period.to}))} a month.` : "Anything you add early lowers the monthly amount.") : `This month: ${inr(m.thisMonth)} of ${inr(m.needed)}`}</span></div></div>
+      <div class="inline" style="flex-wrap:nowrap;margin-top:6px"><input class="field" style="flex:1" id="gc-${id}" inputmode="numeric" placeholder="${m.upcoming ? "Add early ₹" : m.needed > m.thisMonth ? inr(m.needed - m.thisMonth) : "Amount ₹"}" aria-label="Contribution amount"><button class="btn" data-act="contrib" data-id="${id}">Add</button></div>` : ""}
+    <div class="between tiny muted" style="margin-top:6px"><span class="dots">${dots}</span><span>Contributions, last 6 months</span></div>`;
 }
 function todoRow(id, t){
   const ts = new Date(t.done && t.doneAt ? t.doneAt : (t.created||Date.now()));
@@ -800,7 +834,11 @@ function goalMoney(g){
 }
 /* What starting this month instead would cost per month. */
 function startNowNeeded(g){ return goalMoney({...g, start: monthKey(state.now)}).needed; }
-const dueThisMonth = g => { const m = goalMoney(g); return m.status!=="done" && m.status!=="upcoming"; };
+/* Yearly tasks with an amount save toward it over their period, like a money goal. */
+const hasMoney = it => it && (it.kind==="goal" ? isMoney(it) : it.kind==="yearly" && Number(it.amount) > 0);
+function moneyOf(it){ return it.kind==="yearly" ? goalMoney({...it, start: it.period && it.period.from, by: it.period && it.period.to}) : goalMoney(it); }
+const dueThisMonth = g => { const m = moneyOf(g); return m.status!=="done" && m.status!=="upcoming" && !(g.kind==="yearly" && g.done); };
+const moneyItems = () => [...state.items.entries()].filter(([,v]) => hasMoney(v) && dueThisMonth(v));
 function goalSpan(g){
   const s = g.start, e = g.by || (g.target ? `${g.target}-12` : "");
   if (s && e) return `${monthLabel(s)} → ${monthLabel(e)}`;
@@ -948,8 +986,8 @@ function mapSvg(sc, sel){
 
 function homeLifeMap(){
   const sc = lifeScores();
-  const mg = byKind("goal").filter(([,g]) => isMoney(g) && dueThisMonth(g));
-  const need = mg.reduce((t,[,g]) => t + goalMoney(g).needed, 0), put = mg.reduce((t,[,g]) => t + goalMoney(g).thisMonth, 0);
+  const mg = moneyItems();
+  const need = mg.reduce((t,[,g]) => t + moneyOf(g).needed, 0), put = mg.reduce((t,[,g]) => t + moneyOf(g).thisMonth, 0);
   return `<button class="card tap" data-act="go" data-tab="goals" data-goals="map">
     <div class="between"><span class="label">Life map</span><span class="chip">${sc.overall===null ? "Not started" : `Overall ${sc.overall}%`}</span></div>
     <div class="mini">${sc.list.map(a => `<div class="between tiny"><span style="width:62px">${a.label}</span><span style="flex:1">${bar(a.score||0, scoreCls(a.score))}</span><span style="width:34px;text-align:right" class="muted">${a.score===null ? "–" : a.score+"%"}</span></div>`).join("")}</div>
@@ -986,15 +1024,15 @@ function renderLifeMap(){
 }
 function renderGoalList(){
   const goals = byKind("goal").sort((a,b) => AREAS.findIndex(x=>x.k===itemArea(a[1])) - AREAS.findIndex(x=>x.k===itemArea(b[1])));
-  const mg = goals.filter(([,g]) => isMoney(g) && dueThisMonth(g));
-  const need = mg.reduce((t,[,g]) => t + goalMoney(g).needed, 0), put = mg.reduce((t,[,g]) => t + goalMoney(g).thisMonth, 0);
+  const mg = moneyItems();
+  const need = mg.reduce((t,[,g]) => t + moneyOf(g).needed, 0), put = mg.reduce((t,[,g]) => t + moneyOf(g).thisMonth, 0);
   const isM = state.goalMode==="money";
   const nextYear = monthKey(new Date(state.now.getFullYear()+1, state.now.getMonth(), 1)), cm = monthKey(state.now);
   return `${mg.length ? `<div class="card">
       <span class="label">Monthly contribution needed · ${MONTH[state.now.getMonth()]}</span>
       <div class="between"><span class="big">${inr(need)}</span><span class="chip ${put>=need?"good":"warn"}">${put>=need ? "All set" : `${inr(need-put)} to go`}</span></div>
       ${bar(need ? put/need*100 : 100, put>=need?"good":"")}
-      <span class="tiny muted">${inr(put)} put aside so far this month across ${mg.length} money goal${mg.length>1?"s":""}.</span>
+      <span class="tiny muted">${inr(put)} put aside so far this month across ${mg.length} money goal${mg.length>1?"s":""} and yearly task${mg.length>1?"s":""}.</span>
     </div>` : ""}
 
     <form class="card" id="g-form" autocomplete="off">
@@ -1327,13 +1365,13 @@ document.addEventListener("click", e => {
   }
   if (act==="contrib" && it){
     const inp = document.getElementById("gc-"+id), raw = inp && inp.value.trim();
-    const m = goalMoney(it), v = raw ? num(raw) : (m.upcoming ? NaN : Math.max(0, m.needed - m.thisMonth));
+    const m = moneyOf(it), v = raw ? num(raw) : (m.upcoming ? NaN : Math.max(0, m.needed - m.thisMonth));
     if (!isFinite(v) || v===0){ toast("Enter the amount you put aside. Use a minus sign to take money out."); return; }
     const cm = monthKey(state.now), contrib = {...(it.contrib||{})};
     contrib[cm] = Math.max(0, (Number(contrib[cm])||0) + v);
     const saved = Math.max(0, (Number(it.saved)||0) + v);
     updateItem(id, {contrib, saved});
-    toast(saved >= m.amount ? `Goal reached: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
+    toast(saved >= m.amount ? `${it.kind==="yearly" ? "Amount reached" : "Goal reached"}: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
     return;
   }
   if (act==="hmetric"){ state.hmetric = b.dataset.k; render(); return; }
@@ -1355,9 +1393,14 @@ document.addEventListener("click", e => {
     if (!title){ toast("The task needs a name."); return; }
     const next = {...it, title, area: valOf("ed-area") || itemArea(it)};
     delete next.win;
-    if (it.kind==="yearly"){ const r = readPeriod("ed"); if (r.err){ toast(r.err); return; } next.period = r.p; }
+    if (it.kind==="yearly"){
+      const r = readPeriod("ed"); if (r.err){ toast(r.err); return; } next.period = r.p;
+      const a = valOf("ed-amt").trim() ? num(valOf("ed-amt")) : 0, sv = valOf("ed-saved").trim() ? num(valOf("ed-saved")) : 0;
+      if (!isFinite(a) || a < 0 || !isFinite(sv) || sv < 0){ toast("Amounts must be numbers in rupees."); return; }
+      if (a > 0){ next.amount = a; next.saved = sv; next.contrib = next.contrib || {}; } else { delete next.amount; delete next.saved; delete next.contrib; }
+    }
     state.items.set(id, next);
-    toast(next.period ? `Saved · ${periodLabel(next.period)}` : "Saved");
+    toast(next.period ? `Saved · ${periodLabel(next.period)}${hasMoney(next) && moneyOf(next).status!=="done" ? ` · ${inr(moneyOf(next).needed)} a month` : ""}` : "Saved");
     state.editing = null; afterChange(it.kind); return;
   }
   if (act==="ge-cancel"){ state.editing = null; render(); return; }
@@ -1376,6 +1419,7 @@ document.addEventListener("click", e => {
   if (act==="pset"){
     const p = b.dataset.p, f = document.getElementById(p+"-pfrom"), t = document.getElementById(p+"-pto");
     if (f && t){ f.value = b.dataset.f; t.value = b.dataset.t; }
+    if (p==="nw") yearlyPreview();
     return;
   }
   if (act==="prog" && it) updateItem(id, {progress: Math.max(0, Math.min(100, (it.progress||0) + Number(b.dataset.d)))});
@@ -1463,6 +1507,7 @@ document.addEventListener("input", e => {
   const k = e.target.dataset && e.target.dataset.j;
   if (k){ ensureDraft(); state.jdraft[k] = e.target.value; if (state.jsaved){ state.jsaved = false; } }
   if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
+  if (["nw-amt","nw-saved","nw-pfrom","nw-pto"].includes(e.target.id)) yearlyPreview();
 });
 document.addEventListener("change", e => {
   const t = e.target;
@@ -1496,10 +1541,13 @@ document.addEventListener("submit", e => {
     if (kind==="yearly"){
       const r = readPeriod("nw"); if (r.err){ toast(r.err); return; }
       data.period = r.p; data.done = false;
-      clear("new-title");
+      const a = val("nw-amt").trim() ? num(val("nw-amt")) : 0, sv = val("nw-saved").trim() ? num(val("nw-saved")) : 0;
+      if (!isFinite(a) || a < 0 || !isFinite(sv) || sv < 0){ toast("Amounts must be numbers in rupees."); return; }
+      if (a > 0){ data.amount = a; data.saved = sv; data.contrib = {}; }
+      clear("new-title","nw-amt","nw-saved");
       ["nw-pfrom","nw-pto"].forEach(x => { const el = document.getElementById(x); if (el) el.dataset.keep = "no"; });
       setItem(newId(), data);
-      toast(`Added · complete within ${periodLabel(r.p)}`);
+      toast(`Added · complete within ${periodLabel(r.p)}${a > 0 ? ` · ${inr(moneyOf(data).needed)} a month` : ""}`);
       return;
     }
     if (planOf(kind).period) data.log = {};
