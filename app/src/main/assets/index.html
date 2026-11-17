@@ -580,6 +580,40 @@ function goalPreview(){
   out.textContent = t;
 }
 
+function addContribution(id, it, v){
+  const m = moneyOf(it), cm = monthKey(state.now), contrib = {...(it.contrib||{})};
+  contrib[cm] = Math.max(0, (Number(contrib[cm])||0) + v);
+  const saved = Math.max(0, (Number(it.saved)||0) + v);
+  updateItem(id, {contrib, saved});
+  toast(saved >= m.amount ? `${it.kind==="yearly" ? "Amount reached" : "Goal reached"}: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
+}
+/* Money to put aside in this Plan period: P2P contributions of that type, and (monthly) interest plus goal contributions. */
+function planMoney(kind){
+  const rows = [], per = {daily:"today", weekly:"this week", monthly:"this month", yearly:"this year"}[kind];
+  if (!per) return "";
+  for (const [id,a] of byKind("asset")){
+    if (!isP2P(a)) continue;
+    if (Number(a.monthly) && freqOf(a)===kind){
+      const done = p2pAddedThis(a);
+      rows.push(`<li class="${done?"done":""}"><button class="check" data-act="p2p-add" data-id="${id}" aria-pressed="${!!done}" aria-label="Contribution to ${esc(a.name)}">${CHECK}</button>
+        <div class="main"><span class="title">Lend ${inr(a.monthly)} on ${esc(a.name)}</span><span class="meta"><span>${FREQ[kind].label} contribution</span><span class="chip ${done?"good":""}">${done ? "Added" : "Due " + per}</span></span></div></li>`);
+    }
+    if (kind==="monthly" && p2pMonthlyInterest(a)){
+      const got = ((a.p2pLog||{})[monthKey(state.now)]||{}).int;
+      rows.push(`<li class="${got?"done":""}"><button class="check" data-act="p2p-int" data-id="${id}" aria-pressed="${!!got}" aria-label="Interest from ${esc(a.name)}">${CHECK}</button>
+        <div class="main"><span class="title">${a.reinvest!==false ? "Re-lend" : "Collect"} ${inr(got || p2pMonthlyInterest(a))} interest · ${esc(a.name)}</span><span class="meta"><span>${Number(a.rate)||0}% a year</span><span class="chip ${got?"good":""}">${got ? "Recorded" : "Due this month"}</span></span></div></li>`);
+    }
+  }
+  if (kind==="monthly"){
+    for (const [id,g] of moneyItems()){
+      const m = moneyOf(g), done = m.thisMonth >= m.needed;
+      rows.push(`<li class="${done?"done":""}"><button class="check" data-act="plan-contrib" data-id="${id}" aria-pressed="${done}" aria-label="Contribution to ${esc(g.title)}">${CHECK}</button>
+        <div class="main"><span class="title">Put aside ${inr(m.needed)} for ${esc(g.title)}</span><span class="meta"><span>${g.kind==="yearly" ? "Yearly task" : "Goal"} · ${inr(m.thisMonth)} of ${inr(m.needed)}</span><span class="chip ${done?"good":"warn"}">${done ? "Done" : "Due this month"}</span></span></div></li>`);
+    }
+  }
+  return rows.length ? `<div class="sub">Money ${per}</div><ul class="list">${rows.join("")}</ul>` : "";
+}
+
 /* ---------- render ---------- */
 function render(){
   const d = state.now;
@@ -613,9 +647,21 @@ function p2pPlan(bal, ratePct, monthly, reinvest, months){
   return {rows, end:b, interest, added:(Number(monthly)||0)*months};
 }
 const p2pMonthlyInterest = a => Math.round((Number(a.value)||0) * (Number(a.rate)||0)/100/12);
+/* Contributions can be daily, weekly, monthly or yearly; "monthly" holds the amount per period. */
+const FREQ = {daily:{label:"Daily", per:"day", p:"day", perMonth:30.4375}, weekly:{label:"Weekly", per:"week", p:"week", perMonth:365.25/7/12},
+              monthly:{label:"Monthly", per:"month", p:"month", perMonth:1}, yearly:{label:"Yearly", per:"year", p:"year", perMonth:1/12}};
+const freqOf = a => FREQ[a && a.freq] ? a.freq : "monthly";
+const p2pPerMonth = a => (Number(a.monthly)||0) * FREQ[freqOf(a)].perMonth;
+function p2pAddedThis(a){
+  const f = freqOf(a), v = (a.addLog||{})[periodKey(FREQ[f].p, state.now)];
+  if (v) return Number(v);
+  return f==="monthly" ? Number(((a.p2pLog||{})[monthKey(state.now)]||{}).add)||0 : 0;
+}
+const freqOptions = sel => Object.entries(FREQ).map(([k,f]) => `<option value="${k}" ${k===sel?"selected":""}>${f.label}</option>`).join("");
 function p2pPreview(){
   const out = document.getElementById("w-p2p-preview"); if (!out) return;
-  const v = num(valOf("w-val")), r = num(valOf("w-rate")), m = num(valOf("w-monthly")) || 0, n = parseInt(valOf("w-tenure"),10) || 12;
+  const f = FREQ[valOf("w-freq")] ? valOf("w-freq") : "monthly";
+  const v = num(valOf("w-val")), r = num(valOf("w-rate")), m = (num(valOf("w-monthly")) || 0) * FREQ[f].perMonth, n = parseInt(valOf("w-tenure"),10) || 12;
   const re = !!(document.getElementById("w-reinvest")||{}).checked;
   if (!(isFinite(v) && v > 0 && isFinite(r) && r > 0)){ out.textContent = "Enter the amount lent and the interest rate."; return; }
   const pl = p2pPlan(v, r, m, re, n);
@@ -798,7 +844,7 @@ function renderPlan(){
       + (done.length ? `<div class="sub">Done · ${done.length}</div><ul class="list">${rows(done)}</ul>` : "");
   } else body = `<ul class="list">${list.map(([id,it]) => withEd(id, it, recurringRow(id,it,kd))).join("")}</ul>`;
 
-  return seg(PLAN.map(p=>[p.k,p.label]), kd.k, "plan") + head + form + body;
+  return seg(PLAN.map(p=>[p.k,p.label]), kd.k, "plan") + head + form + body + planMoney(kd.k);
 }
 function recurringRow(id, it, kd){
   const done = isDone(it, kd, state.now);
@@ -1229,7 +1275,11 @@ function renderWealth(){
         <label class="flabel" for="w-rate">Interest % a year<input class="field" id="w-rate" inputmode="decimal" value="35"></label>
         <label class="flabel" for="w-tenure">Loan tenure (months)<input class="field" id="w-tenure" inputmode="numeric" value="12"></label>
       </div>
-      <label class="flabel" for="w-monthly">Monthly contribution ₹ <span>New money you lend every month</span><input class="field" id="w-monthly" inputmode="numeric" placeholder="e.g. 1000"></label>
+      <div class="grid2">
+        <label class="flabel" for="w-freq">Contribution type<select class="field" id="w-freq">${freqOptions("monthly")}</select></label>
+        <label class="flabel" for="w-monthly">Contribution ₹<input class="field" id="w-monthly" inputmode="numeric" placeholder="e.g. 1000"></label>
+      </div>
+      <span class="tiny muted">New money you lend each day, week, month or year. It shows up in that Plan tab to tick off.</span>
       <label class="checkline" for="w-reinvest"><input type="checkbox" id="w-reinvest" checked> Re-lend the interest every month</label>
       <span class="small" id="w-p2p-preview"></span>
     </div>`}
@@ -1248,7 +1298,7 @@ function renderWealth(){
 }
 function p2pRow(id, a){
   const cm = monthKey(state.now), log = (a.p2pLog||{})[cm] || {}, mi = p2pMonthlyInterest(a), n = Number(a.tenure)||12;
-  const pl = p2pPlan(a.value, a.rate, a.monthly, a.reinvest!==false, n);
+  const pl = p2pPlan(a.value, a.rate, p2pPerMonth(a), a.reinvest!==false, n), fq = FREQ[freqOf(a)], added = p2pAddedThis(a);
   const earned = Object.values(a.p2pLog||{}).reduce((t,x)=>t+(Number(x.int)||0),0);
   return `<li style="flex-direction:column;align-items:stretch;gap:10px">
     <div class="row"><span class="cat inc">LC</span>
@@ -1257,21 +1307,23 @@ function p2pRow(id, a){
       ${delBtn(id)}</div>
     <div class="grid3">
       <div class="mini"><span class="tiny muted">Interest / month</span><span class="amt pos">${inr(mi)}</span></div>
-      <div class="mini"><span class="tiny muted">You add / month</span><span class="amt">${inr(Number(a.monthly)||0)}</span></div>
+      <div class="mini"><span class="tiny muted">You add / ${fq.per}</span><span class="amt">${inr(Number(a.monthly)||0)}</span></div>
       <div class="mini"><span class="tiny muted">Earned so far</span><span class="amt">${inr(earned)}</span></div>
     </div>
     <div class="notice" style="padding:10px 12px"><div class="main">
-      <span class="small"><b>${MONTH[state.now.getMonth()]}:</b> ${log.int ? `interest ${inr(log.int)} ✓` : "interest not added"} · ${Number(a.monthly) ? (log.add ? `contribution ${inr(log.add)} ✓` : "contribution not added") : "no monthly contribution set"}</span>
-      <span class="inline">${!log.int && mi ? `<button class="btn ghost" style="padding:7px 12px" data-act="p2p-int" data-id="${id}">Add interest ${inr(mi)}</button>` : ""}${Number(a.monthly) && !log.add ? `<button class="btn" style="padding:7px 12px" data-act="p2p-add" data-id="${id}">Add ${inr(a.monthly)}</button>` : ""}</span>
+      <span class="small"><b>${MONTH[state.now.getMonth()]}:</b> ${log.int ? `interest ${inr(log.int)} ✓` : "interest not added"}</span>
+      <span class="small"><b>This ${fq.per}:</b> ${Number(a.monthly) ? (added ? `contribution ${inr(added)} ✓` : `contribution ${inr(a.monthly)} not added`) : "no contribution set"}</span>
+      <span class="inline">${!log.int && mi ? `<button class="btn ghost" style="padding:7px 12px" data-act="p2p-int" data-id="${id}">Add interest ${inr(mi)}</button>` : ""}${Number(a.monthly) && !added ? `<button class="btn" style="padding:7px 12px" data-act="p2p-add" data-id="${id}">Add ${inr(a.monthly)}</button>` : ""}</span>
     </div></div>
     <div class="between small"><span>In ${n} months</span><span><span class="amt">${inr(pl.end)}</span> <span class="muted">· ${inr(pl.interest)} interest</span></span></div>
-    <details class="winbox"><summary>Month-by-month plan and settings</summary>
+    <details class="winbox" id="p2pd-${id}"><summary>Month-by-month plan and settings</summary>
       <div style="overflow-x:auto"><table class="ptable"><thead><tr><th>Month</th><th>Interest</th><th>Balance</th></tr></thead><tbody>
         ${pl.rows.map(r => { const d = new Date(state.now.getFullYear(), state.now.getMonth()+r.k, 1); return `<tr><td>${MON[d.getMonth()]} ${yy(d.getFullYear())}</td><td>${inr(r.int)}</td><td>${inr(r.b)}</td></tr>`; }).join("")}
       </tbody></table></div>
-      <div class="grid3" style="margin-top:10px">
+      <div class="grid2" style="margin-top:10px">
         <label class="flabel" for="pr-${id}">Rate %<input class="field" id="pr-${id}" data-p2p="rate" data-pid="${id}" inputmode="decimal" value="${Number(a.rate)||0}"></label>
-        <label class="flabel" for="pm-${id}">Monthly ₹<input class="field" id="pm-${id}" data-p2p="monthly" data-pid="${id}" inputmode="numeric" value="${Number(a.monthly)||0}"></label>
+        <label class="flabel" for="pf-${id}">Type<select class="field" id="pf-${id}" data-p2p="freq" data-pid="${id}">${freqOptions(freqOf(a))}</select></label>
+        <label class="flabel" for="pm-${id}">${fq.label} ₹<input class="field" id="pm-${id}" data-p2p="monthly" data-pid="${id}" inputmode="numeric" value="${Number(a.monthly)||0}"></label>
         <label class="flabel" for="pt-${id}">Months<input class="field" id="pt-${id}" data-p2p="tenure" data-pid="${id}" inputmode="numeric" value="${n}"></label>
       </div>
       <label class="checkline" for="pi-${id}" style="margin-top:8px"><input type="checkbox" id="pi-${id}" data-p2p="reinvest" data-pid="${id}" ${a.reinvest!==false ? "checked" : ""}> Re-lend the interest every month</label>
@@ -1447,21 +1499,27 @@ document.addEventListener("click", e => {
     const inp = document.getElementById("gc-"+id), raw = inp && inp.value.trim();
     const m = moneyOf(it), v = raw ? num(raw) : (m.upcoming ? NaN : Math.max(0, m.needed - m.thisMonth));
     if (!isFinite(v) || v===0){ toast("Enter the amount you put aside. Use a minus sign to take money out."); return; }
-    const cm = monthKey(state.now), contrib = {...(it.contrib||{})};
-    contrib[cm] = Math.max(0, (Number(contrib[cm])||0) + v);
-    const saved = Math.max(0, (Number(it.saved)||0) + v);
-    updateItem(id, {contrib, saved});
-    toast(saved >= m.amount ? `${it.kind==="yearly" ? "Amount reached" : "Goal reached"}: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
-    return;
+    addContribution(id, it, v); return;
   }
   if ((act==="p2p-int" || act==="p2p-add") && it){
-    const cm = monthKey(state.now), plog = {...(it.p2pLog||{})}, cur = {...(plog[cm]||{})};
+    const cm = monthKey(state.now), plog = {...(it.p2pLog||{})}, cur = {...(plog[cm]||{})}, alog = {...(it.addLog||{})};
     let value = Number(it.value)||0;
-    if (act==="p2p-int"){ const x = p2pMonthlyInterest(it); cur.int = (Number(cur.int)||0) + x; if (it.reinvest!==false) value += x; toast(`Interest ${inr(x)} added${it.reinvest!==false ? " and re-lent" : ""}`); }
-    else { const x = Number(it.monthly)||0; cur.add = (Number(cur.add)||0) + x; value += x; toast(`${inr(x)} added to ${it.name}`); }
+    if (act==="p2p-int"){
+      if (cur.int){ if (it.reinvest!==false) value -= Number(cur.int); delete cur.int; toast("Interest entry removed"); }
+      else { const x = p2pMonthlyInterest(it); cur.int = x; if (it.reinvest!==false) value += x; toast(`Interest ${inr(x)} added${it.reinvest!==false ? " and re-lent" : ""}`); }
+    } else {
+      const f = freqOf(it), k = periodKey(FREQ[f].p, state.now), done = p2pAddedThis(it);
+      if (done){ value -= done; delete alog[k]; if (f==="monthly") delete cur.add; toast("Contribution removed"); }
+      else { const x = Number(it.monthly)||0; alog[k] = x; value += x; toast(`${inr(x)} added to ${it.name}`); }
+    }
     plog[cm] = cur;
-    updateItem(id, {value, p2pLog:plog, updated:Date.now()});
+    updateItem(id, {value: Math.max(0, value), p2pLog:plog, addLog:alog, updated:Date.now()});
     return;
+  }
+  if (act==="plan-contrib" && it){
+    const m = moneyOf(it);
+    if (m.thisMonth >= m.needed){ toast(`Already put aside ${inr(m.thisMonth)} this month. Change it in ${it.kind==="yearly" ? "the Yearly tab" : "Goals"}.`); return; }
+    addContribution(id, it, m.needed - m.thisMonth); return;
   }
   if (act==="hmetric"){ state.hmetric = b.dataset.k; render(); return; }
   if (act==="txtype"){ state.txType = b.dataset.k; render(); return; }
@@ -1598,6 +1656,7 @@ document.addEventListener("input", e => {
   if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
   const mm = /^(nw|ed)-(amt|saved|pfrom|pto)$/.exec(e.target.id || ""); if (mm) calcMonthly(mm[1]);
   if (["w-val","w-rate","w-monthly","w-tenure"].includes(e.target.id)) p2pPreview();
+  if (e.target.id==="w-freq") p2pPreview();
 });
 document.addEventListener("change", e => {
   const t = e.target;
@@ -1620,6 +1679,7 @@ document.addEventListener("change", e => {
     const it = state.items.get(t.dataset.pid); if (!it) return;
     const k = t.dataset.p2p;
     if (k==="reinvest"){ updateItem(t.dataset.pid, {reinvest:t.checked}); return; }
+    if (k==="freq"){ updateItem(t.dataset.pid, {freq:t.value}); toast(`${FREQ[t.value].label} contribution · shows in Plan → ${FREQ[t.value].label}`); return; }
     const v = num(t.value);
     if (!isFinite(v) || v < 0 || (k==="tenure" && (v < 1 || v > 120))){ toast(k==="tenure" ? "Months must be 1 to 120." : "Enter a number."); return; }
     updateItem(t.dataset.pid, {[k]: k==="tenure" ? Math.round(v) : v}); toast("Saved");
@@ -1700,7 +1760,7 @@ document.addEventListener("submit", e => {
       if (!isFinite(r) || r <= 0 || r > 100){ toast("Enter the interest rate, e.g. 35."); return; }
       if (!isFinite(m) || m < 0){ toast("Monthly contribution must be a number."); return; }
       if (!(n >= 1 && n <= 120)){ toast("Loan tenure must be 1 to 120 months."); return; }
-      Object.assign(data, {rate:r, monthly:m, tenure:n, reinvest: !!(document.getElementById("w-reinvest")||{}).checked, p2pLog:{}});
+      Object.assign(data, {rate:r, monthly:m, freq: FREQ[val("w-freq")] ? val("w-freq") : "monthly", tenure:n, reinvest: !!(document.getElementById("w-reinvest")||{}).checked, p2pLog:{}, addLog:{}});
     }
     clear("w-name","w-val","w-monthly");
     setItem(newId(), data);
