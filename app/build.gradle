@@ -1,0 +1,48 @@
+plugins { id "com.android.application" }
+
+android {
+    namespace "com.vaazhkai.tracker"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.vaazhkai.tracker"
+        minSdk 26
+        targetSdk 36
+        versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+        versionName "1.0." + (System.getenv("VERSION_CODE") ?: "1")
+        // GitHub "owner/repo" whose latest release the app checks for updates.
+        resValue "string", "update_repo", (System.getenv("UPDATE_REPO") ?: System.getenv("GITHUB_REPOSITORY") ?: "Blacksttone/LifeOS")
+    }
+
+    // The signing key is not in this repo. CI writes it from the
+    // SIGNING_KEYSTORE_B64 secret so every build installs as an update over
+    // the previous one and data on the phone is kept.
+    signingConfigs {
+        app {
+            storeFile file(System.getenv("KEYSTORE_PATH") ?: "release.keystore")
+            storePassword "vaazhkai123"
+            keyAlias "vaazhkai"
+            keyPassword "vaazhkai123"
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.app
+        }
+        debug { signingConfig signingConfigs.app }
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.14.0"
+    implementation "androidx.core:core:1.17.0"
+}

@@ -1,0 +1,1607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LifeOS</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: app shell. Sticky top bar, one scrolling content column, fixed bottom tab bar (Home, Plan, Money, Health, More). White surfaces, one blue. */
+:root{
+  --bg:#f4f6fa; --surface:#ffffff; --ink:#0f1b2d; --muted:#5d6b80; --faint:#8a96a8; --line:#e2e7ef;
+  --blue:#1f5fd6; --blue-ink:#174bab; --blue-soft:#e9f0fd; --blue-tint:#f5f8fe;
+  --good:#11845a; --good-soft:#e2f4ec; --bad:#c4372f; --bad-soft:#fcebea; --warn:#a86400; --warn-soft:#fdf1df;
+  --head:"Manrope","Inter",ui-sans-serif,system-ui,Roboto,sans-serif;
+  --body:"Inter",ui-sans-serif,system-ui,-apple-system,Roboto,"Segoe UI",sans-serif;
+  --nav-h:64px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);-webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+h1,h2,h3{font-family:var(--head);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar .in{max-width:760px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:32px;height:32px;border-radius:9px;background:var(--blue);display:grid;place-items:center;flex:none}
+.logo svg{width:18px;height:18px}
+.brand h1{font-size:19px;font-weight:800}
+.brand small{display:block;color:var(--muted);font-size:12px;font-family:var(--body);font-weight:500;letter-spacing:0}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;position:relative;flex:none}
+.iconbtn svg{width:20px;height:20px;stroke:var(--ink)}
+.iconbtn .badge{position:absolute;top:6px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--blue)}
+
+main{max-width:760px;margin:0 auto;padding:16px 16px calc(var(--nav-h) + 28px);display:flex;flex-direction:column;gap:16px}
+
+/* bottom nav */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line)}
+.nav .in{max-width:760px;margin:0 auto;height:var(--nav-h);display:grid;grid-template-columns:repeat(6,1fr)}
+.mindmap{width:100%;max-width:420px;height:auto;display:block;margin:0 auto}
+.mindmap text{font-family:var(--body)}
+.mindmap g[data-act]{cursor:pointer}
+.tips{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.tips li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.tips li::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--blue);margin-top:8px}
+.tips .main{gap:6px}
+.tips .btn{align-self:flex-start;padding:6px 12px;font-size:12px}
+.mini{display:flex;flex-direction:column;gap:5px}
+.nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:600;color:var(--faint)}
+.nav svg{width:22px;height:22px;stroke:currentColor}
+.nav button[aria-current="page"]{color:var(--blue)}
+.nav button[aria-current="page"] .pill{background:var(--blue-soft)}
+.nav .pill{padding:3px 14px;border-radius:99px;display:grid;place-items:center}
+
+/* building blocks */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.tap{cursor:pointer;text-align:left}
+.card h3{font-size:15px;font-weight:700}
+.row{display:flex;align-items:center;gap:12px;min-width:0}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.big{font-family:var(--head);font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15;overflow-wrap:anywhere}
+.mid{font-family:var(--head);font-size:18px;font-weight:700;line-height:1.2;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.tiny{font-size:12px}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.hello{display:flex;flex-direction:column;gap:2px}
+.hello h2{font-size:22px;font-weight:800}
+
+.seg{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:none;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:99px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+
+.bar{height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:6px;transition:width .3s}
+.bar.good i{background:var(--good)} .bar.bad i{background:var(--bad)} .bar.warn i{background:var(--warn)}
+
+.ring{--p:0;width:64px;height:64px;border-radius:50%;flex:none;background:conic-gradient(var(--blue) calc(var(--p)*1%),var(--blue-soft) 0);display:grid;place-items:center}
+.ring span{width:50px;height:50px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-family:var(--head);font-weight:800;font-size:14px}
+
+.field{width:100%;min-width:0;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--surface)}
+.field::placeholder{color:var(--faint)}
+.field:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px var(--blue-soft)}
+textarea.field{min-height:80px;resize:vertical;line-height:1.5}
+form.stack{display:flex;flex-direction:column;gap:10px}
+.inline{display:flex;gap:8px;flex-wrap:wrap}
+.inline > .field{flex:1 1 160px}
+.btn{padding:11px 18px;border-radius:11px;border:0;background:var(--blue);color:#fff;font-weight:600;white-space:nowrap}
+.btn:active{background:var(--blue-ink)}
+.btn.ghost{background:var(--surface);color:var(--blue);border:1px solid var(--line)}
+.btn.block{width:100%}
+.toggle2{display:grid;grid-template-columns:1fr 1fr;background:var(--blue-tint);border:1px solid var(--line);border-radius:11px;padding:3px}
+.toggle2 button{border:0;background:transparent;padding:8px;border-radius:8px;font-weight:600;color:var(--muted)}
+.toggle2 button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(15,27,45,.12)}
+
+ul.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+ul.list li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);min-width:0}
+ul.list li:first-child{border-top:0}
+.check{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid #b8c3d4;background:transparent;display:grid;place-items:center;padding:0}
+.check svg{width:14px;height:14px;opacity:0;stroke:#fff}
+li.done .check{background:var(--blue);border-color:var(--blue)}
+li.done .check svg{opacity:1}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.title{overflow-wrap:anywhere;font-weight:500}
+li.done .title{color:var(--faint);text-decoration:line-through}
+.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.dots{display:flex;gap:3px}
+.dots i{width:8px;height:8px;border-radius:2px;background:var(--line)}
+.dots i.on{background:var(--blue)}
+.chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--blue-soft);color:var(--blue-ink);white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)} .chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.del{flex:none;border:0;background:transparent;color:var(--faint);padding:6px;border-radius:8px;font-size:12px;font-weight:600}
+.del.arm{color:var(--bad);background:var(--bad-soft)}
+.amt{font-family:var(--head);font-weight:700;white-space:nowrap}
+.cat{width:36px;height:36px;border-radius:10px;background:var(--blue-soft);color:var(--blue-ink);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.cat.inc{background:var(--good-soft);color:var(--good)}
+.dayhead{padding:8px 14px;background:var(--blue-tint);font-size:12px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between}
+
+.monthnav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.monthnav strong{font-family:var(--head);font-size:16px}
+.monthnav button{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:38px;height:36px}
+.monthnav button:disabled{opacity:.35}
+
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:20px;line-height:1;color:var(--blue)}
+.stepper .val{min-width:56px;text-align:center}
+.metric{display:flex;flex-direction:column;gap:8px}
+.metric .field{padding:9px 11px}
+.unit{font-size:12px;color:var(--muted);font-weight:500;font-family:var(--body)}
+
+.chart{width:100%;height:auto;display:block}
+.chart text{font-family:var(--body);font-size:10px;fill:var(--muted)}
+
+.goal .progress{display:flex;align-items:center;gap:10px}
+.goal .progress .bar{flex:1;height:8px}
+.step{border:1px solid var(--line);background:var(--surface);border-radius:9px;width:38px;height:32px;padding:0;color:var(--blue);font-weight:700}
+
+.moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.mood{border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:9px 2px;font-size:12px;font-weight:600;color:var(--muted)}
+.mood[aria-pressed="true"]{border-color:var(--blue);background:var(--blue-soft);color:var(--blue-ink)}
+.flabel{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:6px}
+.flabel span{color:var(--muted);font-weight:400}
+.entry{cursor:pointer;align-items:flex-start!important}
+.entry .d{flex:none;width:46px;text-align:center;font-size:11px;color:var(--muted);line-height:1.2}
+.entry .d b{display:block;font-family:var(--head);font-size:19px;color:var(--ink)}
+.excerpt{color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+.rtime{flex:none;font-family:var(--head);font-weight:800;font-size:19px;min-width:58px}
+li.off .rtime,li.off .title{color:var(--faint)}
+.switch{flex:none;width:44px;height:26px;border-radius:99px;border:0;background:#cdd5e1;position:relative;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s}
+.switch[aria-checked="true"]{background:var(--blue)}
+.switch[aria-checked="true"]::after{left:21px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.presets button{border:1px dashed #b8c3d4;background:var(--surface);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--blue-ink)}
+
+.notice{padding:12px 14px;border-radius:12px;background:var(--blue-soft);font-size:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.empty{padding:22px 16px;text-align:center;color:var(--muted);border:1px dashed #c9d2df;border-radius:16px;display:flex;flex-direction:column;gap:12px;align-items:center;background:var(--surface)}
+.empty p{margin:0;max-width:42ch}
+.sub{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
+.quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.quick button{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.quick svg{width:22px;height:22px;stroke:var(--blue)}
+.chip.now{background:var(--blue);color:#fff}
+ul.list li.active{background:var(--blue-tint);box-shadow:inset 3px 0 0 var(--blue)}
+ul.list li.editor{flex-direction:column;align-items:stretch;gap:10px;background:var(--blue-tint)}
+.wintime{font-weight:600;color:var(--ink)}
+.winbox{flex:1 1 100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.winbox summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--blue-ink)}
+.winbox[open] summary{margin-bottom:10px}
+.checkline{display:flex;align-items:center;gap:10px;font-size:14px}
+.checkline input{width:20px;height:20px;accent-color:var(--blue)}
+.update{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:var(--blue);color:#fff;text-decoration:none}
+.update b{font-family:var(--head)}
+.update .tiny{color:#dbe6fb}
+.update .btn{background:#fff;color:var(--blue);flex:none}
+.nav .dot{position:absolute;margin:-18px 0 0 18px;width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 16px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:11px;font-size:14px;max-width:calc(100% - 32px);z-index:9}
+@media (max-width:380px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="in">
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <div><h1>LifeOS</h1><small id="today"></small></div>
+  </div>
+  <button class="iconbtn" data-act="go" data-tab="more" data-more="reminders" aria-label="Reminders">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2 2 0 004 0"/></svg>
+    <span class="badge" id="bell-badge" hidden></span>
+  </button>
+</div></header>
+
+<main id="main" aria-live="polite"></main>
+
+<nav class="nav" aria-label="Sections"><div class="in" id="nav"></div></nav>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- constants ---------- */
+const PLAN = [
+  {k:"daily",   label:"Daily",   period:"day",   placeholder:"Add a daily habit, e.g. Workout 30 min"},
+  {k:"todo",    label:"To-do",   period:null,    placeholder:"Add a one-time task"},
+  {k:"weekly",  label:"Weekly",  period:"week",  placeholder:"Add a weekly task, e.g. Review spending"},
+  {k:"monthly", label:"Monthly", period:"month", placeholder:"Add a monthly task, e.g. Invest SIP"},
+  {k:"yearly",  label:"Yearly",  period:"year",  placeholder:"Add a task for this year"}
+];
+const AREAS = [
+  {k:"health",   label:"Health",   goal:"Run 5 km without stopping",      habit:"Workout 30 minutes"},
+  {k:"wealth",   label:"Wealth",   goal:"Build a 6-month emergency fund", habit:"Log today's expenses"},
+  {k:"career",   label:"Career",   goal:"Move to a better-paying role",   habit:"1 hour of focused skill work"},
+  {k:"learning", label:"Learning", goal:"Finish one online course",       habit:"Read 10 pages"},
+  {k:"family",   label:"Family",   goal:"Plan a family trip",             habit:"Call parents"},
+  {k:"mind",     label:"Mind",     goal:"Build a calm morning routine",   habit:"10 minutes meditation"},
+  {k:"personal", label:"Personal", goal:"Learn to swim",                  habit:"Wake up before 6 AM"}
+];
+const areaOf = k => AREAS.find(a=>a.k===k) || AREAS[6];
+function guessArea(t){
+  t = String(t||"").toLowerCase();
+  if (/work ?out|gym|run|walk|water|sleep|diet|health|weight|yoga|steps|fit|doctor|insurance|checkup/.test(t)) return "health";
+  if (/sav|invest|sip|bill|budget|debt|loan|expense|spend|money|fund|income|salary|stock|trad|emi|wealth|rich/.test(t)) return "wealth";
+  if (/career|job|promot|office|client|business|interview|resume|skill/.test(t)) return "career";
+  if (/read|learn|course|study|book|exam|language|class/.test(t)) return "learning";
+  if (/family|call|parent|amma|appa|friend|wife|husband|kid|trip/.test(t)) return "family";
+  if (/journal|meditat|pray|gratitude|mind|calm|stress|mood/.test(t)) return "mind";
+  return "personal";
+}
+const itemArea = v => (v && v.area) || guessArea(v && (v.title || v.name));
+const areaOptions = sel => AREAS.map(a=>`<option value="${a.k}" ${a.k===sel?"selected":""}>${a.label}</option>`).join("");
+const STARTER = [
+  ["daily","Wake up before 6 AM","personal"],["daily","Workout 30 minutes","health"],["daily","Read 10 pages","learning"],["daily","Log today's expenses","wealth"],
+  ["todo","Write down this month's budget","wealth"],
+  ["weekly","Review spending","wealth"],["weekly","Call family","family"],["weekly","Learn one new skill topic","career"],
+  ["monthly","Invest SIP","wealth"],["monthly","Pay all bills on time","wealth"],
+  ["yearly","Full health checkup","health"],["yearly","Renew health insurance","health"]
+];
+const EXP_CATS = ["Food","Groceries","Transport","Rent","Bills","Shopping","Health","Education","Entertainment","EMI / Loan","Family","Travel","Other"];
+const INC_CATS = ["Salary","Business","Trading","Freelance","Interest","Gift","Other"];
+const ASSET_TYPES = ["Bank / Cash","Stocks","Mutual funds","Gold","FD / RD","PF / PPF / NPS","Crypto","Real estate","Other"];
+const LIAB_TYPES = ["Home loan","Personal loan","Vehicle loan","Credit card","Education loan","Borrowed","Other"];
+const MOODS = [["1","Rough"],["2","Low"],["3","Okay"],["4","Good"],["5","Great"]];
+const REPEATS = {daily:"Every day", weekdays:"Mon – Fri", weekends:"Sat & Sun", monthly:"Every month", once:"Once"};
+const PRESETS = [
+  {title:"Drink water", time:"11:00", repeat:"daily"},
+  {title:"Workout", time:"06:30", repeat:"daily"},
+  {title:"Log today's expenses", time:"21:30", repeat:"daily"},
+  {title:"Write journal", time:"22:00", repeat:"daily"},
+  {title:"Pay credit card bill", time:"10:00", repeat:"monthly", dom:5},
+  {title:"SIP investment day", time:"09:30", repeat:"monthly", dom:10},
+  {title:"Weekly money review", time:"18:00", repeat:"weekends"}
+];
+const DEFAULTS = {kind:"settings", waterGoal:8, sleepGoal:8, stepsGoal:8000, workoutGoal:30, budget:0, catBudgets:{}, nw:{}};
+const TABS = [
+  {k:"home",   label:"Home",   icon:'<path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-6h-6v6H5a1 1 0 01-1-1z"/>'},
+  {k:"plan",   label:"Plan",   icon:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'},
+  {k:"goals",  label:"Goals",  icon:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>'},
+  {k:"money",  label:"Money",  icon:'<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M16 14.5h2"/>'},
+  {k:"health", label:"Health", icon:'<path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/>'},
+  {k:"more",   label:"More",   icon:'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'}
+];
+
+const bridge = window.AndroidBridge || null;
+const APP = (() => { try { return bridge && bridge.versionCode ? {code:Number(bridge.versionCode())||0, name:String(bridge.versionName()||""), repo:String(bridge.updateRepo()||"")} : null; } catch(e){ return null; } })();
+
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2,"0");
+const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const monthKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+const parseDay = k => { const [y,m,d] = k.split("-").map(Number); return new Date(y, m-1, d||1); };
+function isoWeek(d){
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y = t.getUTCFullYear();
+  return {y, w: Math.ceil(((t - Date.UTC(y,0,1)) / 864e5 + 1) / 7)};
+}
+function periodKey(p, d){
+  if (p==="day") return dayKey(d);
+  if (p==="week"){ const {y,w}=isoWeek(d); return `${y}-W${pad(w)}`; }
+  if (p==="month") return monthKey(d);
+  return String(d.getFullYear());
+}
+function shift(p, d, n){
+  if (p==="day")  return new Date(d.getFullYear(), d.getMonth(), d.getDate()-n);
+  if (p==="week") return new Date(d.getFullYear(), d.getMonth(), d.getDate()-7*n);
+  if (p==="month")return new Date(d.getFullYear(), d.getMonth()-n, 15);
+  return new Date(d.getFullYear()-n, 6, 1);
+}
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTH = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function periodInfo(p, d){
+  const start0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (p==="day"){ const mins = (d - start0)/6e4; return {text:`${DAYS[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}`, elapsed:mins/1440, left:`${Math.max(0,Math.ceil((1440-mins)/60))} h left today`}; }
+  if (p==="week"){
+    const dow = (d.getDay()+6)%7, s = new Date(start0); s.setDate(s.getDate()-dow);
+    const e = new Date(s); e.setDate(e.getDate()+6); const left = 6-dow;
+    const range = s.getMonth()===e.getMonth() ? `${s.getDate()}–${e.getDate()} ${MON[e.getMonth()]}` : `${s.getDate()} ${MON[s.getMonth()]} – ${e.getDate()} ${MON[e.getMonth()]}`;
+    return {text:`Week ${isoWeek(d).w} · ${range}`, elapsed:(dow+1)/7, left: left===0 ? "Last day of the week" : `${left} day${left>1?"s":""} left`};
+  }
+  if (p==="month"){ const days = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(), left = days - d.getDate();
+    return {text:`${MONTH[d.getMonth()]} ${d.getFullYear()}`, elapsed:d.getDate()/days, left: left===0 ? "Last day of the month" : `${left} day${left>1?"s":""} left`}; }
+  const y = d.getFullYear(), total = Math.round((new Date(y+1,0,1)-new Date(y,0,1))/864e5), done = Math.round((start0-new Date(y,0,1))/864e5)+1;
+  return {text:String(y), elapsed:done/total, left:`${total-done} days left in ${y}`};
+}
+
+/* ---------- money format ---------- */
+const inr = n => "₹" + Math.round(Math.abs(n)).toLocaleString("en-IN");
+const sinr = n => (n < 0 ? "−" : "") + inr(n);
+function short(n){
+  const a = Math.abs(n), s = n < 0 ? "−" : "";
+  if (a >= 1e7) return `${s}₹${(a/1e7).toFixed(a>=1e8?0:2).replace(/\.?0+$/,"")} Cr`;
+  if (a >= 1e5) return `${s}₹${(a/1e5).toFixed(a>=1e6?1:2).replace(/\.?0+$/,"")} L`;
+  return s + inr(a);
+}
+const num = v => { const x = parseFloat(String(v ?? "").replace(/[,₹\s]/g,"")); return isFinite(x) ? x : NaN; };
+
+/* ---------- state + storage (this phone only) ---------- */
+const LOCAL_KEY = "vt-items-v1";
+const state = { items:new Map(), now:new Date(), tab:"home", plan:"daily", money:"spend", more:"journal", goals:"map",
+  txType:"expense", month:null, jdate:null, jdraft:null, jsaved:false, hmetric:"water", liabMode:false,
+  area:null, goalMode:"money", goalArea:"wealth", planArea:null, update:null, checking:false };
+try { const v = JSON.parse(localStorage.getItem("lifeos-view")||"{}"); for (const k of ["tab","plan","money","more","goals"]) if (typeof v[k]==="string") state[k] = v[k]; } catch(e){}
+try { const raw = JSON.parse(localStorage.getItem(LOCAL_KEY)||"{}"); for (const [id,v] of Object.entries(raw)) state.items.set(id,v); } catch(e){}
+state.month = monthKey(state.now);
+if (state.plan==="goal"){ state.plan = "daily"; state.tab = state.tab==="plan" ? "goals" : state.tab; state.goals = "list"; }
+if (!PLAN.some(p=>p.k===state.plan)) state.plan = "daily";
+
+function persist(){ try { localStorage.setItem(LOCAL_KEY, JSON.stringify(Object.fromEntries(state.items))); } catch(e){ toast("Couldn't save on this phone. Storage may be full."); } }
+function saveView(){ try { localStorage.setItem("lifeos-view", JSON.stringify({tab:state.tab, plan:state.plan, money:state.money, more:state.more, goals:state.goals})); } catch(e){} }
+function setItem(id, data){ state.items.set(id, data); afterChange(data.kind); }
+function updateItem(id, patch){ const cur = state.items.get(id); if (!cur) return; state.items.set(id, {...cur, ...patch}); afterChange(cur.kind); }
+function removeItem(id){
+  const cur = state.items.get(id); state.items.delete(id);
+  let linked = false;
+  for (const [rid,r] of [...state.items.entries()]) if (r && r.kind==="reminder" && r.link===id){ state.items.delete(rid); linked = true; }
+  if (state.editing===id) state.editing = null;
+  afterChange(linked ? "reminder" : cur && cur.kind);
+}
+function afterChange(kind){
+  if (kind==="asset" || kind==="liability" || kind==="*") snapshotNetWorth();
+  persist();
+  if (kind==="reminder" || kind==="*") syncReminders();
+  render();
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const settings = () => ({...DEFAULTS, ...(state.items.get("settings")||{})});
+function saveSettings(patch, quiet){ state.items.set("settings", {...settings(), ...patch}); persist(); if (!quiet) render(); }
+
+function syncReminders(){
+  if (!bridge) return;
+  const list = byKind("reminder").map(([,r]) => ({title:r.title, time:r.time, repeat:r.repeat, date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false}));
+  try { bridge.setReminders(JSON.stringify(list)); } catch(e){}
+}
+function notifAllowed(){ try { return !bridge || bridge.notificationsAllowed(); } catch(e){ return true; } }
+window.__notifChanged = () => render();
+
+let toastTimer;
+function toast(t){ const el = document.getElementById("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ el.hidden = true; }, 2600); }
+
+/* ---------- derived ---------- */
+const planOf = k => PLAN.find(x=>x.k===k);
+const byKind = k => [...state.items.entries()].filter(([,v]) => v && v.kind===k).sort((a,b)=>(a[1].created||0)-(b[1].created||0));
+function isDone(item, kd, d){
+  if (item.kind==="yearly") return !!item.done;
+  if (kd.period) return !!(item.log && item.log[periodKey(kd.period, d)]);
+  if (item.kind==="todo") return !!item.done;
+  return (item.progress||0) >= 100;
+}
+function streak(log){
+  let d = state.now, n = 0;
+  if (!log[dayKey(d)]) d = shift("day", d, 1);
+  while (log[dayKey(d)]) { n++; d = shift("day", d, 1); }
+  return n;
+}
+const hasContent = j => j && (j.mood || (j.good||"").trim() || (j.better||"").trim() || (j.notes||"").trim());
+function journalLog(){ const o = {}; for (const [,j] of byKind("journal")) if (hasContent(j)) o[j.date] = true; return o; }
+function planSummary(kd){
+  const list = byKind(kd.k).map(([,v])=>v);
+  if (kd.k==="goal"){ const avg = list.length ? Math.round(list.reduce((s,g)=>s+(g.progress||0),0)/list.length) : 0; return {done:avg, total:100, list}; }
+  if (kd.k==="todo"){ return {done:list.filter(t=>t.done).length, total:list.length, open:list.filter(t=>!t.done).length, list}; }
+  return {done:list.filter(v=>isDone(v,kd,state.now)).length, total:list.length, list};
+}
+
+/* reminders */
+function nextFire(r, now){
+  if (r.enabled===false) return null;
+  const [h,m] = (r.time||"08:00").split(":").map(Number);
+  if (r.repeat==="once"){ if (!r.date) return null; const t = parseDay(r.date); t.setHours(h,m,0,0); return t > now ? t : null; }
+  if (r.repeat==="monthly"){
+    const dom = Math.min(31, Math.max(1, r.dom||1));
+    for (let i=0;i<14;i++){
+      const last = new Date(now.getFullYear(), now.getMonth()+i+1, 0).getDate();
+      const t = new Date(now.getFullYear(), now.getMonth()+i, Math.min(dom,last), h, m, 0, 0);
+      if (t > now) return t;
+    }
+    return null;
+  }
+  for (let i=0;i<8;i++){
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate()+i, h, m, 0, 0);
+    if (t <= now) continue;
+    const wd = t.getDay()>=1 && t.getDay()<=5;
+    if (r.repeat==="weekdays" && !wd) continue;
+    if (r.repeat==="weekends" && wd) continue;
+    return t;
+  }
+  return null;
+}
+function whenLabel(t){
+  if (!t) return "";
+  const n = state.now, k = dayKey(t), hm = `${pad(t.getHours())}:${pad(t.getMinutes())}`;
+  if (k===dayKey(n)) return `Today ${hm}`;
+  if (k===dayKey(shift("day", n, -1))) return `Tomorrow ${hm}`;
+  return `${DAYS[t.getDay()].slice(0,3)} ${t.getDate()} ${MON[t.getMonth()]}, ${hm}`;
+}
+function nextReminder(){
+  const all = byKind("reminder").map(([,r]) => ({r, t:nextFire(r, state.now)})).filter(x=>x.t).sort((a,b)=>a.t-b.t);
+  return all[0] || null;
+}
+
+/* money */
+function txns(month){ return byKind("txn").map(([id,t])=>[id,t]).filter(([,t]) => !month || (t.date||"").startsWith(month)); }
+function monthTotals(month){
+  let inc = 0, exp = 0; const cats = {};
+  for (const [,t] of txns(month)){ const a = Number(t.amount)||0; if (t.type==="income") inc += a; else { exp += a; cats[t.category||"Other"] = (cats[t.category||"Other"]||0) + a; } }
+  return {inc, exp, net: inc-exp, cats};
+}
+function netWorth(){
+  const a = byKind("asset").reduce((s,[,x])=>s+(Number(x.value)||0),0);
+  const l = byKind("liability").reduce((s,[,x])=>s+(Number(x.value)||0),0);
+  return {assets:a, liab:l, net:a-l};
+}
+function snapshotNetWorth(){
+  const s = settings(), nw = {...(s.nw||{})};
+  nw[monthKey(state.now)] = netWorth().net;
+  state.items.set("settings", {...s, nw});
+}
+
+/* health */
+const healthDay = k => state.items.get("h-"+k) || {kind:"health", date:k};
+function setHealth(k, patch){ const cur = healthDay(k); setItem("h-"+k, {...cur, ...patch, kind:"health", date:k}); }
+
+/* ---------- render helpers ---------- */
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const CHECK = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const icon = (paths, extra="") => `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ${extra}>${paths}</svg>`;
+const bar = (pct, cls="") => `<div class="bar ${cls}"><i style="width:${Math.max(0,Math.min(100,Math.round(pct)))}%"></i></div>`;
+const delBtn = id => `<button class="del" data-act="del" data-id="${esc(id)}">Delete</button>`;
+const seg = (items, cur, act) => `<div class="seg" role="group">${items.map(([k,l]) => `<button data-act="${act}" data-k="${k}" aria-pressed="${cur===k}">${l}</button>`).join("")}</div>`;
+const initials = s => esc(String(s||"?").replace(/[^A-Za-z ]/g," ").trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase() || "₹");
+
+/* bar chart: values array of {label, v}, goal optional */
+function barChart(vals, goal, fmt){
+  const W = 320, H = 130, top = 14, bottom = 20, left = 4, right = 4;
+  const max = Math.max(goal||0, ...vals.map(x=>x.v||0), 1);
+  const bw = (W-left-right)/vals.length;
+  const y = v => top + (H-top-bottom) * (1 - v/max);
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Last ${vals.length} days">`;
+  s += `<line x1="${left}" x2="${W-right}" y1="${H-bottom}" y2="${H-bottom}" stroke="var(--line)"/>`;
+  if (goal){ s += `<line x1="${left}" x2="${W-right}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--blue)" stroke-dasharray="4 4" opacity=".5"/>`; }
+  vals.forEach((x,i) => {
+    const v = x.v||0, bx = left + i*bw + bw*0.22, w = bw*0.56, by = y(v), h = (H-bottom) - by;
+    const last = i===vals.length-1;
+    s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="3" fill="${last ? "var(--blue)" : "#b9cdf3"}"/>`;
+    if (v) s += `<text x="${(bx+w/2).toFixed(1)}" y="${(by-3).toFixed(1)}" text-anchor="middle">${esc(fmt ? fmt(v) : v)}</text>`;
+    s += `<text x="${(bx+w/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(x.label)}</text>`;
+  });
+  return s + `</svg>`;
+}
+/* line chart for net worth */
+function lineChart(points){
+  const W = 320, H = 120, top = 16, bottom = 20, left = 6, right = 6;
+  const vs = points.map(p=>p.v); const min = Math.min(...vs, 0), max = Math.max(...vs, 1);
+  const x = i => left + (W-left-right) * (points.length===1 ? 0.5 : i/(points.length-1));
+  const y = v => top + (H-top-bottom) * (1 - (v-min)/((max-min)||1));
+  const path = points.map((p,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+  const area = path + `L${x(points.length-1).toFixed(1)},${H-bottom}L${x(0).toFixed(1)},${H-bottom}Z`;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Net worth trend">`;
+  s += `<line x1="${left}" x2="${W-right}" y1="${H-bottom}" y2="${H-bottom}" stroke="var(--line)"/>`;
+  if (min < 0) s += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/>`;
+  s += `<path d="${area}" fill="var(--blue-soft)"/><path d="${path}" fill="none" stroke="var(--blue)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  points.forEach((p,i)=>{ s += `<text x="${x(i).toFixed(1)}" y="${H-6}" text-anchor="${i===0?"start":i===points.length-1?"end":"middle"}">${esc(p.label)}</text>`; });
+  const li = points.length-1;
+  s += `<circle cx="${x(li).toFixed(1)}" cy="${y(points[li].v).toFixed(1)}" r="4" fill="var(--blue)" stroke="#fff" stroke-width="2"/>`;
+  s += `<text x="${Math.min(x(li), W-right).toFixed(1)}" y="${(y(points[li].v)-8).toFixed(1)}" text-anchor="end" style="font-weight:600;fill:var(--ink)">${esc(short(points[li].v))}</text>`;
+  return s + `</svg>`;
+}
+
+/* ---------- app updates (latest GitHub release of this app's public repo) ---------- */
+const UPDATE_KEY = "lifeos-update-check";
+function updateBanner(){
+  const u = state.update; if (!u) return "";
+  return `<a class="update" href="${esc(u.url)}"><div class="main"><b>Update available · version ${esc(u.name)}</b><span class="tiny">Tap to download it, then open the file to install. Your data is kept.</span></div><span class="btn">Download</span></a>`;
+}
+function renderAppInfo(){
+  const last = (() => { try { return Number(localStorage.getItem(UPDATE_KEY))||0; } catch(e){ return 0; } })();
+  return `${updateBanner()}<div class="card">
+    <h3>LifeOS</h3>
+    <div class="between small"><span class="muted">Installed version</span><span class="amt">${APP ? esc(APP.name || String(APP.code)) : "Browser preview"}</span></div>
+    ${last ? `<div class="between small"><span class="muted">Last checked</span><span>${new Date(last).getDate()} ${MON[new Date(last).getMonth()]}, ${pad(new Date(last).getHours())}:${pad(new Date(last).getMinutes())}</span></div>` : ""}
+    <button class="btn ghost" data-act="check-update" ${state.checking ? "disabled" : ""}>${state.checking ? "Checking…" : "Check for updates"}</button>
+    ${APP && APP.repo ? `<span class="tiny muted">Updates come from github.com/${esc(APP.repo)}</span>` : ""}
+  </div>`;
+}
+async function checkUpdate(manual){
+  if (!APP || !APP.repo){ if (manual) toast("Update checks work in the Android app."); return; }
+  if (state.checking) return;
+  state.checking = true; if (manual) render();
+  try {
+    const r = await fetch(`https://api.github.com/repos/${APP.repo}/releases/latest`, {headers:{Accept:"application/vnd.github+json"}, cache:"no-store"});
+    if (!r.ok) throw new Error(String(r.status));
+    const j = await r.json();
+    const code = parseInt(String(j.tag_name||"").replace(/\D+/g,""), 10);
+    const apk = (j.assets||[]).find(a => /\.apk$/i.test(a.name||""));
+    state.update = (code > APP.code && apk) ? {code, name:"1.0."+code, url:apk.browser_download_url} : null;
+    try { localStorage.setItem(UPDATE_KEY, String(Date.now())); } catch(e){}
+    if (manual) toast(state.update ? `Version 1.0.${code} is available` : "You have the latest version");
+  } catch(e){
+    if (manual) toast("Couldn't check for updates. Check your internet connection and try again.");
+  } finally { state.checking = false; render(); }
+}
+function maybeCheckUpdate(){
+  let last = 0; try { last = Number(localStorage.getItem(UPDATE_KEY))||0; } catch(e){}
+  if (Date.now() - last > 6*3600e3 || state.update === null && last === 0) checkUpdate(false);
+}
+
+function goalPreview(){
+  const out = document.getElementById("g-preview"), amtEl = document.getElementById("g-amt"); if (!out || !amtEl) return;
+  const amount = num(amtEl.value), saved = num(valOf("g-saved")) || 0, by = valOf("g-by"), start = valOf("g-start");
+  if (!(isFinite(amount) && amount > 0 && /^\d{4}-\d{2}$/.test(by))){ out.textContent = ""; return; }
+  const g = {amount, saved, by, start, contrib:{}}, m = goalMoney(g);
+  if (m.status==="overdue"){ out.textContent = "\"Reach it by\" must be on or after \"Start from\"."; return; }
+  let t = m.upcoming ? `From ${monthLabel(m.from)}: about ${inr(m.needed)} a month for ${m.monthsLeft} months.` : `That's about ${inr(m.needed)} a month for ${m.monthsLeft} months, until ${monthLabel(by)}.`;
+  if (m.upcoming){ const now = startNowNeeded(g); if (now < m.needed) t += ` Starting this month: ${inr(now)} a month.`; }
+  out.textContent = t;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const d = state.now;
+  document.getElementById("today").textContent = `${DAYS[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById("nav").innerHTML = TABS.map(t => `<button data-act="go" data-tab="${t.k}" ${t.k==="more" && state.update ? `data-more="app"` : ""} aria-current="${state.tab===t.k?"page":"false"}"><span class="pill">${icon(t.icon)}</span>${t.k==="more" && state.update ? `<span class="dot" aria-label="Update available"></span>` : ""}${t.label}</button>`).join("");
+  document.getElementById("bell-badge").hidden = !nextReminder();
+
+  const main = document.getElementById("main");
+  const keep = {};
+  main.querySelectorAll("input[id],select[id]").forEach(el => { if (el.dataset.keep!=="no" && el.dataset.live!=="1") keep[el.id] = el.value; });
+  const focusId = document.activeElement && document.activeElement.id;
+  const openBoxes = [...main.querySelectorAll("details[id]")].filter(x => x.open && x.dataset.keep!=="no").map(x => x.id);
+  const liveVals = {}; if (state.keepLive) main.querySelectorAll("[data-live='1'][id]").forEach(el => { liveVals[el.id] = el.type==="checkbox" ? el.checked : el.value; });
+  state.keepLive = false;
+
+  const views = {home:renderHome, plan:renderPlan, goals:renderGoals, money:renderMoney, health:renderHealth, more:renderMore};
+  main.innerHTML = (views[state.tab] || renderHome)();
+
+  for (const [id,v] of Object.entries(keep)){ const el = main.querySelector("#"+CSS.escape(id)); if (el && v !== undefined) el.value = v; }
+  for (const id of openBoxes){ const el = main.querySelector("#"+CSS.escape(id)); if (el) el.open = true; }
+  for (const [id,v] of Object.entries(liveVals)){ const el = main.querySelector("#"+CSS.escape(id)); if (el){ if (el.type==="checkbox") el.checked = v; else el.value = v; } }
+  syncFormVisibility();
+  if (focusId){ const el = main.querySelector("#"+CSS.escape(focusId)); el && el.focus(); }
+}
+function syncFormVisibility(){
+  const rep = document.getElementById("r-repeat");
+  if (rep){ document.getElementById("r-date-wrap").hidden = rep.value!=="once"; document.getElementById("r-dom-wrap").hidden = rep.value!=="monthly"; }
+}
+
+/* HOME */
+function renderHome(){
+  const d = state.now, hr = d.getHours();
+  const greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+  const daily = planSummary(planOf("daily"));
+  const pct = daily.total ? Math.round(daily.done/daily.total*100) : 0;
+  const todo = planSummary(planOf("todo"));
+  const m = monthTotals(monthKey(d)), s = settings(), nw = netWorth();
+  const h = healthDay(dayKey(d));
+  const nr = nextReminder();
+  const wrote = !!journalLog()[dayKey(d)];
+  const budgetLeft = s.budget ? s.budget - m.exp : null;
+  const anyData = state.items.size > 0;
+
+  return `${updateBanner()}<div class="hello"><h2>${greet}</h2><span class="muted small">Here's your day at a glance.</span></div>
+
+  ${!anyData ? `<div class="empty"><p>Welcome to LifeOS. Start by loading a starter plan of daily habits, tasks and goals. You can edit or delete any of them.</p><button class="btn" data-act="starter">Load starter plan</button></div>` : ""}
+
+  <button class="card tap" data-act="go" data-tab="plan" data-plan="daily">
+    <div class="row">
+      <div class="ring" style="--p:${pct}"><span>${pct}%</span></div>
+      <div class="main"><span class="label">Today's habits</span><span class="mid">${daily.done} of ${daily.total} done</span>
+        <span class="muted small">${todo.open ? `${todo.open} to-do${todo.open>1?"s":""} open` : "No open to-dos"}</span></div>
+    </div>
+  </button>
+
+  <div class="quick">
+    <button data-act="quick-exp">${icon('<path d="M12 5v14M5 12h14"/>')}Add expense</button>
+    <button data-act="water" data-d="1">${icon('<path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/>')}+1 water</button>
+    <button data-act="go" data-tab="more" data-more="journal">${icon('<path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/>')}Journal</button>
+  </div>
+
+  ${homeLifeMap()}
+
+  <div class="grid2">
+    <button class="card tap" data-act="go" data-tab="money" data-money="spend">
+      <span class="label">Spent in ${MON[d.getMonth()]}</span>
+      <span class="big">${short(m.exp)}</span>
+      ${s.budget ? `${bar(m.exp/s.budget*100, m.exp > s.budget ? "bad" : m.exp > s.budget*0.8 ? "warn" : "")}<span class="tiny ${budgetLeft<0?"neg":"muted"}">${budgetLeft<0 ? `${inr(-budgetLeft)} over budget` : `${inr(budgetLeft)} left of ${short(s.budget)}`}</span>`
+                 : `<span class="tiny muted">Income ${short(m.inc)} · Set a budget</span>`}
+    </button>
+    <button class="card tap" data-act="go" data-tab="money" data-money="wealth">
+      <span class="label">Net worth</span>
+      <span class="big ${nw.net<0?"neg":""}">${short(nw.net)}</span>
+      <span class="tiny muted">${short(nw.assets)} assets · ${short(nw.liab)} loans</span>
+    </button>
+    <button class="card tap" data-act="go" data-tab="health">
+      <span class="label">Water today</span>
+      <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal} glasses</span></span>
+      ${bar((h.water||0)/s.waterGoal*100, (h.water||0)>=s.waterGoal ? "good" : "")}
+    </button>
+    <button class="card tap" data-act="go" data-tab="health">
+      <span class="label">Sleep · Steps</span>
+      <span class="mid">${h.sleep ? `${h.sleep} h` : "–"} · ${h.steps ? Number(h.steps).toLocaleString("en-IN") : "–"}</span>
+      <span class="tiny muted">${h.workout ? `${h.workout} min workout` : "No workout logged"}</span>
+    </button>
+  </div>
+
+  <button class="card tap" data-act="go" data-tab="more" data-more="reminders">
+    <div class="between"><span class="label">Next reminder</span>${nr ? `<span class="chip">${esc(whenLabel(nr.t))}</span>` : ""}</div>
+    <span class="mid">${nr ? esc(nr.r.title) : "No reminders set"}</span>
+    ${!nr ? `<span class="tiny muted">Tap to add reminders for water, workouts and bills.</span>` : ""}
+  </button>
+
+  <button class="card tap" data-act="go" data-tab="more" data-more="journal">
+    <div class="between"><span class="label">Journal</span>${wrote ? `<span class="chip good">Written today</span>` : `<span class="chip warn">Not written yet</span>`}</div>
+    <span class="small muted">${(() => { const s2 = streak(journalLog()); return s2 ? `${s2}-day writing streak. Keep it going.` : "Two minutes to reflect on your day."; })()}</span>
+  </button>`;
+}
+
+/* ---------- yearly tasks: finish within a chosen period (2026, 2026–27, Dec 27…) ---------- */
+const valOf = id => (document.getElementById(id)||{}).value || "";
+const ymOf = k => { const [y,m] = String(k).split("-").map(Number); return {y, m}; };
+const yy = y => String(y).slice(2);
+function periodLabel(p){
+  if (!p) return "";
+  const a = ymOf(p.from), b = ymOf(p.to);
+  if (p.from===p.to) return `${MON[a.m-1]} ${yy(a.y)}`;
+  if (a.m===1 && b.m===12) return a.y===b.y ? String(a.y) : `${a.y}–${yy(b.y)}`;
+  return `${MON[a.m-1]} ${yy(a.y)} – ${MON[b.m-1]} ${yy(b.y)}`;
+}
+function periodRange(p){ const a = ymOf(p.from), b = ymOf(p.to); return [new Date(a.y, a.m-1, 1), new Date(b.y, b.m, 0, 23, 59, 59, 999)]; }
+function periodStatus(it){
+  const p = it.period; if (!p) return null;
+  const [s,e] = periodRange(p), now = state.now, pct = Math.max(0, Math.min(100, (now - s)/(e - s)*100));
+  if (it.done) return {cls:"good", text: !it.doneAt || it.doneAt <= e.getTime() ? "Done" : "Done late", pct};
+  if (now < s) return {cls:"", text:`Starts ${MON[s.getMonth()]} ${s.getFullYear()}`, pct:0, upcoming:true};
+  if (now > e) return {cls:"bad", text:"Overdue", pct:100, overdue:true};
+  const days = Math.ceil((e - now)/864e5);
+  const left = days <= 45 ? `${days} day${days>1?"s":""} left` : `${Math.round(days/30.44)} months left`;
+  return {cls: days <= 30 ? "warn" : "now", text:left, pct, active:true};
+}
+function periodPresets(p){
+  const y = state.now.getFullYear(), cm = monthKey(state.now);
+  return [["This year",`${y}-01`,`${y}-12`],["Next year",`${y+1}-01`,`${y+1}-12`],[`${y}–${yy(y+1)}`,`${y}-01`,`${y+1}-12`],[`By Dec ${yy(y+1)}`,cm,`${y+1}-12`]]
+    .map(([l,f,t]) => `<button type="button" data-act="pset" data-p="${p}" data-f="${f}" data-t="${t}">${l}</button>`).join("");
+}
+function periodInputs(p, cur, live){
+  const y = state.now.getFullYear(), v = cur || {from:`${y}-01`, to:`${y}-12`}, l = live ? `data-live="1"` : "";
+  return `<div class="grid2"><label class="flabel" for="${p}-pfrom">From<input class="field" type="month" id="${p}-pfrom" ${l} value="${esc(v.from)}"></label>
+    <label class="flabel" for="${p}-pto">Complete by<input class="field" type="month" id="${p}-pto" ${l} value="${esc(v.to)}"></label></div>
+    <div class="presets">${periodPresets(p)}</div>`;
+}
+function readPeriod(p){
+  const f = valOf(p+"-pfrom"), t = valOf(p+"-pto");
+  if (!/^\d{4}-\d{2}$/.test(f) || !/^\d{4}-\d{2}$/.test(t)) return {err:"Pick both months."};
+  if (t < f) return {err:"\"Complete by\" can't be before \"From\"."};
+  return {p:{from:f, to:t}};
+}
+function editorRow(id, it){
+  return `<li class="editor">
+    <label class="flabel" for="ed-title">Task<input class="field" id="ed-title" data-live="1" maxlength="140" value="${esc(it.title)}"></label>
+    <label class="flabel" for="ed-area">Life area<select class="field" id="ed-area" data-live="1">${areaOptions(itemArea(it))}</select></label>
+    ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}` : ""}
+    <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button>
+      <span class="inline"><button class="btn ghost" data-act="ed-cancel">Cancel</button><button class="btn" data-act="ed-save" data-id="${id}">Save</button></span></div>
+  </li>`;
+}
+
+/* PLAN */
+function renderPlan(){
+  const kd = planOf(state.plan) || PLAN[0], d = state.now, list = byKind(kd.k);
+  let head = "";
+  if (kd.k==="yearly"){
+    const st = list.map(([,it]) => periodStatus(it) || {});
+    const done = list.filter(([,it]) => it.done).length, act = st.filter(s=>s.active).length, od = st.filter(s=>s.overdue).length, up = st.filter(s=>s.upcoming).length;
+    head = list.length ? `<div class="card"><div class="between"><span class="mid">Long-range tasks</span><span class="chip">${done}/${list.length} done</span></div>
+      ${bar(list.length ? done/list.length*100 : 0, "good")}
+      <span class="tiny muted">${act} in progress${up ? ` · ${up} upcoming` : ""}${od ? ` · <b class="neg">${od} overdue</b>` : ""}</span></div>` : "";
+  } else if (kd.period){
+    const pi = periodInfo(kd.period, d), sm = planSummary(kd);
+    head = `<div class="card"><div class="between"><span class="mid">${esc(pi.text)}</span><span class="chip">${sm.done}/${sm.total} done</span></div>
+      ${bar(pi.elapsed*100)}<span class="tiny muted">${esc(pi.left)}</span></div>`;
+  }
+
+  const form = kd.k==="yearly"
+    ? `<form class="card" id="add-form" autocomplete="off">
+        <h3>New long-range task</h3>
+        <input class="field" id="new-title" maxlength="140" placeholder="e.g. Full health checkup, buy a bike, clear loan" aria-label="Task">
+        <select class="field" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
+        ${periodInputs("nw", null, false)}
+        <button class="btn block" type="submit">Add task</button></form>`
+    : `<form class="inline" id="add-form" autocomplete="off">
+        <input class="field" id="new-title" maxlength="140" placeholder="${esc(kd.placeholder)}" aria-label="${esc(kd.placeholder)}">
+        <select class="field" style="flex:0 1 130px" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
+        <button class="btn" type="submit">Add</button></form>`;
+
+  const anyTasks = [...state.items.values()].some(v => v && PLAN.some(p=>p.k===v.kind));
+  const withEd = (id, it, row) => row + (state.editing===id ? editorRow(id,it) : "");
+  let body;
+  if (!anyTasks) body = `<div class="empty"><p>No plan yet. Add your first item above, or load a starter plan.</p><button class="btn ghost" data-act="starter">Load starter plan</button></div>`;
+  else if (!list.length) body = `<div class="empty"><p>No ${kd.label.toLowerCase()} items yet. Add one above.</p></div>`;
+  else if (kd.k==="todo"){
+    const open = list.filter(([,t])=>!t.done), done = list.filter(([,t])=>t.done).sort((a,b)=>(b[1].doneAt||0)-(a[1].doneAt||0));
+    const rows = arr => arr.map(([id,t]) => withEd(id, t, todoRow(id,t))).join("");
+    body = (open.length ? `<ul class="list">${rows(open)}</ul>` : `<div class="empty"><p>All clear. Nothing pending.</p></div>`)
+      + (done.length ? `<div class="between"><span class="sub">Done · ${done.length}</span><button class="del" data-act="clear-done">Clear done</button></div><ul class="list">${rows(done)}</ul>` : "");
+  } else if (kd.k==="yearly"){
+    const end = it => it.period ? it.period.to : "9999";
+    const open = list.filter(([,t])=>!t.done).sort((a,b) => end(a[1]).localeCompare(end(b[1]))), done = list.filter(([,t])=>t.done);
+    const rows = arr => arr.map(([id,t]) => withEd(id, t, yearlyRow(id,t))).join("");
+    body = (open.length ? `<ul class="list">${rows(open)}</ul>` : `<div class="empty"><p>Everything here is done.</p></div>`)
+      + (done.length ? `<div class="sub">Done · ${done.length}</div><ul class="list">${rows(done)}</ul>` : "");
+  } else body = `<ul class="list">${list.map(([id,it]) => withEd(id, it, recurringRow(id,it,kd))).join("")}</ul>`;
+
+  return seg(PLAN.map(p=>[p.k,p.label]), kd.k, "plan") + head + form + body;
+}
+function recurringRow(id, it, kd){
+  const done = isDone(it, kd, state.now);
+  const n = {day:7, week:6, month:6}[kd.period], unit = {day:"days", week:"weeks", month:"months"}[kd.period];
+  const log = it.log || {}; let dots = "", hits = 0;
+  for (let i=n-1;i>=0;i--){ const on = !!log[periodKey(kd.period, shift(kd.period, state.now, i))]; if (on) hits++; dots += `<i class="${on?"on":""}"></i>`; }
+  const s = kd.k==="daily" ? streak(log) : 0;
+  return `<li class="${done?"done":""}">
+    <button class="check" data-act="toggle" data-id="${id}" aria-pressed="${done}" aria-label="Mark ${esc(it.title)} ${done?"not done":"done"}">${CHECK}</button>
+    <div class="main"><span class="title">${esc(it.title)}</span>
+      <span class="meta"><span class="dots">${dots}</span><span>${hits}/${n} last ${n} ${unit}</span>${s ? `<span class="chip">${s}-day streak</span>` : ""}<span>${areaOf(itemArea(it)).label}</span></span></div>
+    ${editBtn(id)}</li>`;
+}
+function yearlyRow(id, it){
+  const st = periodStatus(it) || {cls:"", text:"", pct:0};
+  return `<li class="${it.done?"done":""}" style="align-items:flex-start">
+    <button class="check" data-act="todo" data-id="${id}" aria-pressed="${!!it.done}" aria-label="Mark ${esc(it.title)} ${it.done?"not done":"done"}">${CHECK}</button>
+    <div class="main"><span class="title">${esc(it.title)}</span>
+      <span class="meta"><span class="wintime">${esc(periodLabel(it.period))}</span><span class="chip ${st.cls}">${esc(st.text)}</span><span>${areaOf(itemArea(it)).label}</span></span>
+      ${!it.done && st.active ? `<div class="bar ${st.cls==="warn"?"warn":""}" style="height:4px;margin-top:4px" title="Time used"><i style="width:${Math.round(st.pct)}%"></i></div>` : ""}</div>
+    ${editBtn(id)}</li>`;
+}
+function todoRow(id, t){
+  const ts = new Date(t.done && t.doneAt ? t.doneAt : (t.created||Date.now()));
+  return `<li class="${t.done?"done":""}">
+    <button class="check" data-act="todo" data-id="${id}" aria-pressed="${!!t.done}" aria-label="Mark ${esc(t.title)} ${t.done?"not done":"done"}">${CHECK}</button>
+    <div class="main"><span class="title">${esc(t.title)}</span>
+      <span class="meta">${t.done ? "Done" : "Added"} ${ts.getDate()} ${MON[ts.getMonth()]} · ${areaOf(itemArea(t)).label}</span></div>
+    ${editBtn(id)}</li>`;
+}
+const goalEditBtn = id => `<button class="del" data-act="edit" data-id="${id}" aria-expanded="${state.editing===id}">${state.editing===id ? "Close" : "Edit"}</button>`;
+const editBtn = id => `<button class="del" data-act="edit" data-id="${id}" aria-expanded="${state.editing===id}">${state.editing===id ? "Close" : "Edit"}</button>`;
+/* GOALS */
+const monthIdx = k => { const [y,m] = k.split("-").map(Number); return y*12 + (m-1); };
+const monthLabel = k => { const [y,m] = k.split("-").map(Number); return `${MON[m-1]} ${y}`; };
+const isMoney = g => g.mode==="money";
+/* Money goal maths: what to put aside this month so the goal is met by its month. */
+/* Saving runs from the start month (or this month, if later) to the "by" month, inclusive. */
+function goalMoney(g){
+  const cm = monthKey(state.now), contrib = g.contrib || {}, thisMonth = Number(contrib[cm])||0;
+  const amount = Number(g.amount)||0, saved = Number(g.saved)||0;
+  const upcoming = !!g.start && g.start > cm;
+  const from = upcoming ? g.start : cm;
+  const savedBefore = upcoming ? saved : Math.max(0, saved - thisMonth);
+  const left = (g.by ? monthIdx(g.by) : monthIdx(from)) - monthIdx(from) + 1;
+  const monthsLeft = Math.max(1, left);
+  const needed = Math.max(0, Math.ceil((amount - savedBefore) / monthsLeft));
+  const pct = amount ? Math.min(100, saved/amount*100) : 0;
+  let status = "behind";
+  if (saved >= amount && amount > 0) status = "done";
+  else if (left < 1) status = "overdue";
+  else if (upcoming) status = "upcoming";
+  else if (thisMonth >= needed) status = "ontrack";
+  return {amount, saved, thisMonth, needed, monthsLeft: left, pct, status, from, upcoming};
+}
+/* What starting this month instead would cost per month. */
+function startNowNeeded(g){ return goalMoney({...g, start: monthKey(state.now)}).needed; }
+const dueThisMonth = g => { const m = goalMoney(g); return m.status!=="done" && m.status!=="upcoming"; };
+function goalSpan(g){
+  const s = g.start, e = g.by || (g.target ? `${g.target}-12` : "");
+  if (s && e) return `${monthLabel(s)} → ${monthLabel(e)}`;
+  if (e) return `by ${g.by ? monthLabel(g.by) : g.target}`;
+  return s ? `from ${monthLabel(s)}` : "";
+}
+function goalEditor(id, g){
+  const money = isMoney(g), cm = monthKey(state.now);
+  return `<li class="editor">
+    <label class="flabel" for="ge-title">Goal<input class="field" id="ge-title" data-live="1" maxlength="80" value="${esc(g.title)}"></label>
+    <label class="flabel" for="ge-area">Life area<select class="field" id="ge-area" data-live="1">${areaOptions(itemArea(g))}</select></label>
+    ${money ? `<label class="flabel" for="ge-amt">Target amount ₹<input class="field" id="ge-amt" data-live="1" inputmode="numeric" value="${Math.round(Number(g.amount)||0)}"></label>` : ""}
+    <div class="grid2">
+      <label class="flabel" for="ge-start">Start from<input class="field" id="ge-start" data-live="1" type="month" value="${esc(g.start || cm)}"></label>
+      <label class="flabel" for="ge-by">Reach it by<input class="field" id="ge-by" data-live="1" type="month" value="${esc(g.by || (g.target ? `${g.target}-12` : ""))}"></label>
+    </div>
+    <div class="between"><button class="del" data-act="del" data-id="${id}">Delete goal</button>
+      <span class="inline"><button class="btn ghost" data-act="ge-cancel">Cancel</button><button class="btn" data-act="ge-save" data-id="${id}">Save</button></span></div>
+  </li>`;
+}
+const goalPct = g => isMoney(g) ? goalMoney(g).pct : Math.max(0, Math.min(100, Number(g.progress)||0));
+const goalsIn = k => byKind("goal").filter(([,g]) => itemArea(g)===k);
+const habitsIn = k => [...state.items.entries()].filter(([,v]) => v && ["daily","weekly","monthly"].includes(v.kind) && itemArea(v)===k);
+
+/* Area scores, 0–100, from the user's own data. null = nothing to judge yet. */
+function habitRate(k){
+  let sum = 0, n = 0;
+  for (const [,v] of habitsIn(k)){
+    const kd = planOf(v.kind), N = {day:7, week:4, month:3}[kd.period], log = v.log || {};
+    let hits = 0; for (let i=0;i<N;i++) if (log[periodKey(kd.period, shift(kd.period, state.now, i))]) hits++;
+    sum += hits/N; n++;
+  }
+  return n ? sum/n : null;
+}
+function goalRate(k){ const gs = goalsIn(k); return gs.length ? gs.reduce((s,[,g])=>s+goalPct(g)/100,0)/gs.length : null; }
+function healthRate(){
+  const s = settings(); let sum = 0, n = 0;
+  for (let i=0;i<7;i++){
+    const h = healthDay(dayKey(shift("day", state.now, i)));
+    for (const [key, goal] of [["water",s.waterGoal],["sleep",s.sleepGoal],["steps",s.stepsGoal],["workout",s.workoutGoal]])
+      if (h[key] !== undefined && h[key] !== null && h[key] !== "") { sum += Math.min(1, (Number(h[key])||0)/goal); n++; }
+  }
+  return n ? sum/n : null;
+}
+function financeRate(){
+  const m = monthTotals(monthKey(state.now)), s = settings(), parts = [];
+  if (m.inc > 0) parts.push(Math.min(1, Math.max(0, m.net/m.inc)/0.3));
+  if (s.budget) parts.push(m.exp <= s.budget ? 1 : Math.max(0, 1 - (m.exp-s.budget)/s.budget));
+  const mg = byKind("goal").filter(([,g]) => isMoney(g) && dueThisMonth(g));
+  if (mg.length) parts.push(mg.filter(([,g]) => goalMoney(g).status==="ontrack").length / mg.length);
+  return parts.length ? parts.reduce((a,b)=>a+b,0)/parts.length : null;
+}
+function journalRate(){
+  const log = journalLog(); if (!Object.keys(log).length) return null;
+  let n = 0; for (let i=0;i<7;i++) if (log[dayKey(shift("day", state.now, i))]) n++;
+  return n/7;
+}
+function areaScore(k){
+  const parts = [habitRate(k), goalRate(k)];
+  if (k==="health") parts.push(healthRate());
+  if (k==="wealth") parts.push(financeRate());
+  if (k==="mind") parts.push(journalRate());
+  const ok = parts.filter(x => x !== null);
+  return ok.length ? Math.round(ok.reduce((a,b)=>a+b,0)/ok.length*100) : null;
+}
+function lifeScores(){
+  const list = AREAS.map(a => ({...a, score: areaScore(a.k), goals: goalsIn(a.k).length, habits: habitsIn(a.k).length}));
+  const scored = list.filter(a => a.score !== null);
+  const overall = scored.length ? Math.round(scored.reduce((s,a)=>s+a.score,0)/scored.length) : null;
+  const weakest = scored.length ? scored.reduce((a,b)=> b.score < a.score ? b : a) : null;
+  const strongest = scored.length ? scored.reduce((a,b)=> b.score > a.score ? b : a) : null;
+  return {list, overall, weakest, strongest};
+}
+const scoreCls = s => s===null ? "" : s >= 70 ? "good" : s >= 40 ? "" : "warn";
+const scoreColor = s => s===null ? "#cdd5e1" : s >= 70 ? "var(--good)" : s >= 40 ? "var(--blue)" : "var(--warn)";
+
+/* Concrete next steps for an area, worked out from the data. */
+function tipsFor(k){
+  const a = areaOf(k), tips = [], s = settings();
+  const gs = goalsIn(k), hs = habitsIn(k), has = t => [...state.items.values()].some(v => v && (v.title||"").toLowerCase()===t.toLowerCase());
+  if (k==="health"){
+    let logged = 0, water = 0, sleep = 0, sleepN = 0, steps = 0, stepsN = 0, wdays = 0;
+    for (let i=0;i<7;i++){ const h = healthDay(dayKey(shift("day", state.now, i)));
+      if (h.water || h.sleep || h.steps || h.workout) logged++;
+      water += Number(h.water)||0; if (h.sleep){ sleep += Number(h.sleep); sleepN++; } if (h.steps){ steps += Number(h.steps); stepsN++; } if (Number(h.workout) > 0) wdays++; }
+    if (logged < 3) tips.push({text:"Log water, sleep and steps in the Health tab every day. You can't improve what you don't track."});
+    else {
+      if (water/7 < s.waterGoal - 1) tips.push({text:`You average ${(water/7).toFixed(1)} glasses of water a day. Set water reminders for 11:00 and 16:00.`, preset:0});
+      if (sleepN && sleep/sleepN < s.sleepGoal - 0.5) tips.push({text:`Sleep averages ${(sleep/sleepN).toFixed(1)} h. Fix a bedtime ${s.sleepGoal} hours before you need to wake up and keep the phone away 30 minutes before it.`});
+      if (stepsN && steps/stepsN < s.stepsGoal*0.8) tips.push({text:`You average ${Math.round(steps/stepsN).toLocaleString("en-IN")} steps. A 20-minute walk after dinner adds about 2,000.`});
+      if (wdays < 3) tips.push({text:`You worked out on ${wdays} of the last 7 days. Aim for at least 3.`, habit:"Workout 30 minutes"});
+    }
+  }
+  if (k==="wealth"){
+    const m = monthTotals(monthKey(state.now)), nw = netWorth();
+    if (!m.inc && !m.exp) tips.push({text:"Add this month's income and expenses in Money. Your savings rate shows up once you do."});
+    else if (m.inc && m.net/m.inc < 0.2) tips.push({text:`You saved ${Math.max(0,Math.round(m.net/m.inc*100))}% of income this month. Aim for at least 20%: move savings out on salary day, before you spend.`});
+    if (!s.budget) tips.push({text:"Set a monthly spending budget in Money → Budget."});
+    else if (m.exp > s.budget) tips.push({text:`You are ${inr(m.exp - s.budget)} over budget. Pause non-essential spending until next month.`});
+    const ef = byKind("goal").some(([,g]) => /emergency/i.test(g.title));
+    if (!ef){ const avgExp = m.exp || 0; tips.push({text:`Start an emergency fund goal${avgExp ? ` of about ${short(avgExp*6)} (6 months of this month's spending)` : ""}.`, goal:{title:"Build a 6-month emergency fund", amount: avgExp ? Math.round(avgExp*6/1000)*1000 : 0}}); }
+    const behind = byKind("goal").filter(([,g]) => isMoney(g) && ["behind","overdue"].includes(goalMoney(g).status));
+    if (behind.length){ const need = behind.reduce((t,[,g]) => t + Math.max(0, goalMoney(g).needed - goalMoney(g).thisMonth), 0);
+      tips.push({text:`${behind.length} money goal${behind.length>1?"s are":" is"} behind this month. Put aside ${inr(need)} more to get back on track.`}); }
+    if (byKind("liability").some(([,l]) => /credit/i.test(l.type))) tips.push({text:"Clear credit card dues first. They usually carry the highest interest of any loan."});
+    if (!byKind("asset").length) tips.push({text:"Add your bank balance and investments in Money → Wealth to see your net worth."});
+  }
+  if (k==="mind"){
+    const log = journalLog(); let n = 0, low = 0;
+    for (let i=0;i<7;i++){ const dk = dayKey(shift("day", state.now, i)); if (log[dk]) n++; const j = state.items.get("j-"+dk); if (j && (j.mood==="1" || j.mood==="2")) low++; }
+    if (n < 4) tips.push({text:`You wrote the journal on ${n} of the last 7 days. Aim for 4. A 22:00 reminder helps.`, preset:3});
+    if (low >= 2) tips.push({text:`Your mood was low on ${low} days this week. Note what drained you, and plan one thing you enjoy for tomorrow.`});
+  }
+  if (!gs.length) tips.push({text:`Set one ${a.label.toLowerCase()} goal, e.g. "${a.goal}".`, goal:{title:a.goal}});
+  if (!hs.length && !has(a.habit)) tips.push({text:`Add a small habit, e.g. "${a.habit}". Small daily actions move big goals.`, habit:a.habit});
+  for (const [,g] of gs){ if (!isMoney(g) && (Number(g.progress)||0) < 20 && (Date.now() - (g.created||Date.now())) > 14*864e5) { tips.push({text:`"${g.title}" hasn't moved much. Break it into one weekly task and add it to your plan.`}); break; } }
+  if (!tips.length) tips.push({text:`${a.label} is going well. Keep your streaks going and raise one target a little.`});
+  return tips.slice(0,5);
+}
+
+function mapSvg(sc, sel){
+  const cx = 180, cy = 168, R = 122, r = 33, C = 2*Math.PI*r;
+  let lines = "", nodes = "";
+  sc.list.forEach((a,i) => {
+    const ang = (-90 + i*360/sc.list.length) * Math.PI/180, x = cx + R*Math.cos(ang), y = cy + R*Math.sin(ang);
+    const on = a.k===sel, p = a.score===null ? 0 : a.score/100;
+    lines += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${on ? "var(--blue)" : "var(--line)"}" stroke-width="${on ? 2.5 : 1.5 + Math.min(3, (a.goals + a.habits)*0.5)}"/>`;
+    nodes += `<g data-act="area" data-k="${a.k}" role="button" aria-label="${a.label} ${a.score===null ? "not started" : a.score+"%"}">
+      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${on ? "var(--blue-soft)" : "var(--surface)"}" stroke="var(--line)" stroke-width="4"/>
+      ${p > 0 ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="none" stroke="${scoreColor(a.score)}" stroke-width="4" stroke-linecap="round"
+        stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 ${x.toFixed(1)} ${y.toFixed(1)})"/>` : ""}
+      <text x="${x.toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--muted)">${a.label}</text>
+      <text x="${x.toFixed(1)}" y="${(y+13).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="800" fill="var(--ink)">${a.score===null ? "–" : a.score+"%"}</text>
+      <text x="${x.toFixed(1)}" y="${(y+r+13).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--faint)">${a.goals} goal${a.goals===1?"":"s"} · ${a.habits} habit${a.habits===1?"":"s"}</text>
+    </g>`;
+  });
+  return `<svg class="mindmap" viewBox="0 0 360 336" role="group" aria-label="Life map">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>
+    ${lines}
+    <circle cx="${cx}" cy="${cy}" r="44" fill="var(--blue)"/>
+    <text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="11" font-weight="600" fill="#dbe6fb">You</text>
+    <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="19" font-weight="800" fill="#fff">${sc.overall===null ? "–" : sc.overall+"%"}</text>
+    ${nodes}</svg>`;
+}
+
+function homeLifeMap(){
+  const sc = lifeScores();
+  const mg = byKind("goal").filter(([,g]) => isMoney(g) && dueThisMonth(g));
+  const need = mg.reduce((t,[,g]) => t + goalMoney(g).needed, 0), put = mg.reduce((t,[,g]) => t + goalMoney(g).thisMonth, 0);
+  return `<button class="card tap" data-act="go" data-tab="goals" data-goals="map">
+    <div class="between"><span class="label">Life map</span><span class="chip">${sc.overall===null ? "Not started" : `Overall ${sc.overall}%`}</span></div>
+    <div class="mini">${sc.list.map(a => `<div class="between tiny"><span style="width:62px">${a.label}</span><span style="flex:1">${bar(a.score||0, scoreCls(a.score))}</span><span style="width:34px;text-align:right" class="muted">${a.score===null ? "–" : a.score+"%"}</span></div>`).join("")}</div>
+    ${sc.weakest ? `<span class="small">Focus area: <b>${sc.weakest.label}</b>. Tap to see how to improve it.</span>` : `<span class="small muted">Add goals and habits to see where your life is strong and where to improve.</span>`}
+  </button>
+  ${mg.length ? `<button class="card tap" data-act="go" data-tab="goals" data-goals="list">
+    <div class="between"><span class="label">Goal contributions · ${MON[state.now.getMonth()]}</span><span class="chip ${put>=need?"good":"warn"}">${put>=need?"On track":"Pending"}</span></div>
+    <span class="mid">${inr(put)} <span class="unit">of ${inr(need)} needed</span></span>${bar(need ? put/need*100 : 100, put>=need?"good":"")}</button>` : ""}`;
+}
+
+function renderGoals(){
+  const tabs = seg([["map","Life map"],["list","Goals"]], state.goals, "goals");
+  return tabs + (state.goals==="list" ? renderGoalList() : renderLifeMap());
+}
+function renderLifeMap(){
+  const sc = lifeScores();
+  const sel = state.area || (sc.weakest && sc.weakest.k) || "health";
+  const a = sc.list.find(x=>x.k===sel), tips = tipsFor(sel);
+  state.area = sel; state.lastTips = tips;
+  const gs = goalsIn(sel), hs = habitsIn(sel);
+  return `<div class="card">
+      ${mapSvg(sc, sel)}
+      <span class="tiny muted" style="text-align:center">Each circle fills as that part of your life improves. Tap one to see details.</span>
+    </div>
+    <div class="card">
+      <div class="between"><h3>${a.label}</h3><span class="inline">${sc.weakest && sc.weakest.k===sel ? `<span class="chip warn">Focus area</span>` : ""}${sc.strongest && sc.strongest.k===sel && sc.list.filter(x=>x.score!==null).length>1 ? `<span class="chip good">Strongest</span>` : ""}<span class="chip ${scoreCls(a.score)}">${a.score===null ? "Not started" : a.score+"%"}</span></span></div>
+      ${bar(a.score||0, scoreCls(a.score))}
+      ${gs.length ? `<span class="sub">Goals</span>${gs.map(([,g]) => { const p = Math.round(goalPct(g)); return `<div class="mini"><div class="between small"><span>${esc(g.title)}</span><span class="muted">${p}%</span></div>${bar(p, p>=100?"good":"")}</div>`; }).join("")}` : ""}
+      ${hs.length ? `<span class="sub">Habits</span>${hs.map(([,v]) => { const kd = planOf(v.kind), N = {day:7, week:4, month:3}[kd.period], u = {day:"days", week:"weeks", month:"months"}[kd.period]; let n = 0; for (let i=0;i<N;i++) if ((v.log||{})[periodKey(kd.period, shift(kd.period, state.now, i))]) n++; return `<div class="between small"><span>${esc(v.title)}</span><span class="muted">${n}/${N} ${u}</span></div>`; }).join("")}` : ""}
+      <span class="sub">How to improve</span>
+      <ul class="tips">${tips.map((t,i) => `<li><div class="main"><span>${esc(t.text)}</span>${t.habit ? `<button class="btn ghost" data-act="tip" data-i="${i}">Add habit: ${esc(t.habit)}</button>` : t.goal ? `<button class="btn ghost" data-act="tip" data-i="${i}">Create this goal</button>` : t.preset!==undefined ? `<button class="btn ghost" data-act="tip" data-i="${i}">Add reminder</button>` : ""}</div></li>`).join("")}</ul>
+      <div class="grid2"><button class="btn ghost" data-act="area-goal" data-k="${sel}">Add ${a.label.toLowerCase()} goal</button><button class="btn ghost" data-act="area-habit" data-k="${sel}">Add habit</button></div>
+    </div>`;
+}
+function renderGoalList(){
+  const goals = byKind("goal").sort((a,b) => AREAS.findIndex(x=>x.k===itemArea(a[1])) - AREAS.findIndex(x=>x.k===itemArea(b[1])));
+  const mg = goals.filter(([,g]) => isMoney(g) && dueThisMonth(g));
+  const need = mg.reduce((t,[,g]) => t + goalMoney(g).needed, 0), put = mg.reduce((t,[,g]) => t + goalMoney(g).thisMonth, 0);
+  const isM = state.goalMode==="money";
+  const nextYear = monthKey(new Date(state.now.getFullYear()+1, state.now.getMonth(), 1)), cm = monthKey(state.now);
+  return `${mg.length ? `<div class="card">
+      <span class="label">Monthly contribution needed · ${MONTH[state.now.getMonth()]}</span>
+      <div class="between"><span class="big">${inr(need)}</span><span class="chip ${put>=need?"good":"warn"}">${put>=need ? "All set" : `${inr(need-put)} to go`}</span></div>
+      ${bar(need ? put/need*100 : 100, put>=need?"good":"")}
+      <span class="tiny muted">${inr(put)} put aside so far this month across ${mg.length} money goal${mg.length>1?"s":""}.</span>
+    </div>` : ""}
+
+    <form class="card" id="g-form" autocomplete="off">
+      <h3>New goal</h3>
+      <div class="toggle2" role="group" aria-label="Goal type"><button type="button" data-act="gmode" data-k="money" aria-pressed="${isM}">Money goal</button><button type="button" data-act="gmode" data-k="progress" aria-pressed="${!isM}">Life goal</button></div>
+      <input class="field" id="g-title" maxlength="80" placeholder="${isM ? "e.g. Emergency fund, new bike, house down payment" : "e.g. Run a half marathon, get promoted"}" aria-label="Goal name" value="${esc(state.goalTitle||"")}">
+      <select class="field" id="g-area" data-live="1" aria-label="Life area">${areaOptions(state.goalArea)}</select>
+      ${isM ? `<div class="grid2">
+        <label class="flabel" for="g-amt">Target ₹<input class="field" id="g-amt" inputmode="numeric" placeholder="e.g. 100000" value="${state.goalAmount||""}"></label>
+        <label class="flabel" for="g-saved">Saved so far ₹<input class="field" id="g-saved" inputmode="numeric" placeholder="0"></label>
+      </div>` : ""}
+      <div class="grid2">
+        <label class="flabel" for="g-start">Start from<input class="field" id="g-start" type="month" value="${cm}"></label>
+        <label class="flabel" for="g-by">Reach it by<input class="field" id="g-by" type="month" min="${cm}" value="${nextYear}"></label>
+      </div>
+      ${isM ? `<span class="tiny muted">LifeOS works out how much to put aside every month between these two months.</span>` : ""}
+      <span class="tiny muted" id="g-preview"></span>
+      <button class="btn block" type="submit">Add goal</button>
+    </form>
+
+    ${goals.length ? `<ul class="list">${goals.map(([id,g]) => (isMoney(g) ? moneyGoalRow(id,g) : lifeGoalRow(id,g)) + (state.editing===id ? goalEditor(id,g) : "")).join("")}</ul>`
+      : `<div class="empty"><p>No goals yet. Add a money goal like an emergency fund, and LifeOS tells you how much to save each month.</p></div>`}`;
+}
+function moneyGoalRow(id, g){
+  const m = goalMoney(g), a = areaOf(itemArea(g));
+  const chip = {done:`<span class="chip good">Achieved</span>`, ontrack:`<span class="chip good">On track</span>`, behind:`<span class="chip warn">Behind</span>`, overdue:`<span class="chip bad">Past target date</span>`, upcoming:`<span class="chip">Starts ${monthLabel(m.from)}</span>`}[m.status];
+  let dots = ""; for (let i=5;i>=0;i--){ const k = monthKey(shift("month", state.now, i)); dots += `<i class="${(g.contrib||{})[k] > 0 ? "on" : ""}" title="${monthLabel(k)}"></i>`; }
+  const nowNeed = m.upcoming ? startNowNeeded(g) : 0;
+  return `<li style="flex-direction:column;align-items:stretch;gap:10px">
+    <div class="row"><span class="cat inc">${initials(g.title)}</span><div class="main"><span class="title" style="font-weight:600">${esc(g.title)}</span><span class="meta">${a.label}${goalSpan(g) ? ` · ${goalSpan(g)}` : ""} ${chip}</span></div>${goalEditBtn(id)}</div>
+    ${bar(m.pct, m.status==="done"?"good":"")}
+    <div class="between small"><span><span class="amt">${inr(m.saved)}</span> <span class="muted">of ${inr(m.amount)}</span></span><span class="muted">${Math.round(m.pct)}%</span></div>
+    ${m.status!=="done" ? `<div class="notice" style="padding:10px 12px">
+        <div class="main"><span class="small">${m.status==="overdue" ? `Target month has passed. ${inr(m.amount - m.saved)} still to go.`
+          : m.upcoming ? `From ${monthLabel(m.from)}, put aside <b>${inr(m.needed)}</b> a month for ${m.monthsLeft} month${m.monthsLeft>1?"s":""}`
+          : `Put aside <b>${inr(m.needed)}</b> a month for ${m.monthsLeft} month${m.monthsLeft>1?"s":""}`}</span>
+        <span class="tiny muted">${m.upcoming ? (nowNeed < m.needed ? `Start this month instead and it's only ${inr(nowNeed)} a month. Anything you add early lowers it too.` : "Anything you add before it starts lowers the monthly amount.") : `This month: ${inr(m.thisMonth)} of ${inr(m.needed)}`}</span></div>
+      </div>
+      <div class="inline" style="flex-wrap:nowrap"><input class="field" style="flex:1" id="gc-${id}" inputmode="numeric" placeholder="${m.upcoming ? "Add early ₹" : m.needed > m.thisMonth ? inr(m.needed - m.thisMonth) : "Amount ₹"}" aria-label="Contribution amount"><button class="btn" data-act="contrib" data-id="${id}">Add contribution</button></div>` : ""}
+    <div class="between tiny muted"><span class="dots">${dots}</span><span>Contributions, last 6 months</span></div>
+  </li>`;
+}
+function lifeGoalRow(id, g){
+  const p = Math.max(0, Math.min(100, Number(g.progress)||0)), yr = state.now.getFullYear(), a = areaOf(itemArea(g));
+  let chip = "";
+  const cm = monthKey(state.now), end = g.by || (g.target ? `${g.target}-12` : "");
+  if (p >= 100) chip = `<span class="chip good">Achieved</span>`;
+  else if (g.start && g.start > cm) chip = `<span class="chip">Starts ${monthLabel(g.start)}</span>`;
+  else if (end){ const left = monthIdx(end) - monthIdx(cm);
+    chip = `<span class="chip ${left<0?"bad":left<3?"warn":""}">${left<0 ? "Target passed" : left===0 ? "Due this month" : left < 12 ? `${left} month${left>1?"s":""} to go` : `${Math.round(left/12*10)/10} yrs to go`}</span>`; }
+  return `<li class="goal" style="flex-direction:column;align-items:stretch">
+    <div class="row"><span class="cat">${initials(a.label)}</span><div class="main"><span class="title" style="font-weight:600">${esc(g.title)}</span><span class="meta">${a.label}${goalSpan(g) ? ` · ${goalSpan(g)}` : ""} ${chip}</span></div>${goalEditBtn(id)}</div>
+    <div class="progress">
+      <button class="step" data-act="prog" data-id="${id}" data-d="-10" aria-label="Decrease progress">−</button>
+      ${bar(p, p>=100?"good":"")}<span class="mid" style="width:52px;text-align:right">${p}%</span>
+      <button class="step" data-act="prog" data-id="${id}" data-d="10" aria-label="Increase progress">+</button>
+    </div></li>`;
+}
+
+/* MONEY */
+function renderMoney(){
+  const tabs = seg([["spend","Income & expenses"],["budget","Budget"],["wealth","Wealth"]], state.money, "money");
+  if (state.money==="budget") return tabs + renderBudget();
+  if (state.money==="wealth") return tabs + renderWealth();
+  return tabs + renderSpend();
+}
+function monthNav(){
+  const cur = parseDay(state.month+"-01"), isNow = state.month===monthKey(state.now);
+  return `<div class="monthnav"><button data-act="mprev" aria-label="Previous month">‹</button><strong>${MONTH[cur.getMonth()]} ${cur.getFullYear()}</strong><button data-act="mnext" aria-label="Next month" ${isNow?"disabled":""}>›</button></div>`;
+}
+function renderSpend(){
+  const m = monthTotals(state.month), s = settings();
+  const rate = m.inc > 0 ? Math.round(m.net/m.inc*100) : null;
+  const cats = EXP_CATS, icats = INC_CATS, isExp = state.txType==="expense";
+  const list = txns(state.month).sort((a,b)=> (b[1].date||"").localeCompare(a[1].date||"") || (b[1].created||0)-(a[1].created||0));
+  const groups = {};
+  for (const [id,t] of list) (groups[t.date] = groups[t.date] || []).push([id,t]);
+  const catRows = Object.entries(m.cats).sort((a,b)=>b[1]-a[1]);
+  const maxCat = catRows.length ? catRows[0][1] : 1;
+
+  return `${monthNav()}
+  <div class="grid3">
+    <div class="card"><span class="label">Income</span><span class="mid pos">${short(m.inc)}</span></div>
+    <div class="card"><span class="label">Expenses</span><span class="mid neg">${short(m.exp)}</span></div>
+    <div class="card"><span class="label">Saved</span><span class="mid ${m.net<0?"neg":""}">${short(m.net)}</span>${rate!==null ? `<span class="tiny muted">${rate}% of income</span>` : ""}</div>
+  </div>
+  ${s.budget && state.month===monthKey(state.now) ? `<div class="card"><div class="between"><span class="label">Monthly budget</span><span class="small ${m.exp>s.budget?"neg":"muted"}">${inr(m.exp)} of ${inr(s.budget)}</span></div>${bar(m.exp/s.budget*100, m.exp>s.budget?"bad":m.exp>s.budget*.8?"warn":"")}</div>` : ""}
+
+  <form class="card" id="tx-form" autocomplete="off">
+    <div class="toggle2" role="group" aria-label="Type"><button type="button" data-act="txtype" data-k="expense" aria-pressed="${isExp}">Expense</button><button type="button" data-act="txtype" data-k="income" aria-pressed="${!isExp}">Income</button></div>
+    <div class="grid2">
+      <input class="field" id="tx-amt" inputmode="decimal" placeholder="Amount ₹" aria-label="Amount in rupees">
+      <select class="field" id="tx-cat" data-live="1" aria-label="Category">${(isExp?cats:icats).map(c=>`<option>${c}</option>`).join("")}</select>
+    </div>
+    <div class="grid2">
+      <input class="field" id="tx-note" maxlength="80" placeholder="Note (optional)" aria-label="Note">
+      <input class="field" id="tx-date" type="date" value="${dayKey(state.now)}" max="${dayKey(state.now)}" aria-label="Date">
+    </div>
+    <button class="btn block" type="submit">Add ${isExp?"expense":"income"}</button>
+  </form>
+
+  ${catRows.length ? `<div class="card"><h3>Where the money went</h3>${catRows.map(([c,v]) => {
+      const lim = s.catBudgets && s.catBudgets[c];
+      return `<div style="display:flex;flex-direction:column;gap:5px"><div class="between small"><span>${esc(c)}</span><span class="amt">${inr(v)}${lim?`<span class="muted tiny" style="font-weight:500"> / ${inr(lim)}</span>`:""}</span></div>
+        ${bar(lim ? v/lim*100 : v/maxCat*100, lim ? (v>lim?"bad":v>lim*.8?"warn":"") : "")}</div>`; }).join("")}</div>` : ""}
+
+  ${list.length ? `<ul class="list">${Object.entries(groups).map(([date, rows]) => {
+      const dd = parseDay(date), dayExp = rows.reduce((s2,[,t])=>s2+(t.type==="expense"?Number(t.amount)||0:0),0);
+      return `<li class="dayhead"><span>${DAYS[dd.getDay()].slice(0,3)}, ${dd.getDate()} ${MON[dd.getMonth()]}</span><span>${dayExp?`Spent ${inr(dayExp)}`:""}</span></li>` +
+        rows.map(([id,t]) => `<li><span class="cat ${t.type==="income"?"inc":""}">${initials(t.category)}</span>
+          <div class="main"><span class="title">${esc(t.note || t.category)}</span><span class="meta">${t.note ? esc(t.category) : (t.type==="income" ? "Income" : "Expense")}</span></div>
+          <span class="amt ${t.type==="income"?"pos":""}">${t.type==="income"?"+":"−"}${inr(t.amount)}</span>${delBtn(id)}</li>`).join("");
+    }).join("")}</ul>` : `<div class="empty"><p>No transactions in this month yet. Add your salary and daily expenses to see where your money goes.</p></div>`}`;
+}
+function renderBudget(){
+  const s = settings(), m = monthTotals(monthKey(state.now));
+  return `<div class="card">
+    <h3>Monthly spending budget</h3>
+    <span class="small muted">One number for all spending this month. LifeOS warns you at 80% and when you go over.</span>
+    <form class="inline" id="budget-form"><input class="field" id="b-total" inputmode="numeric" placeholder="e.g. 25000" value="${s.budget||""}" aria-label="Monthly budget in rupees"><button class="btn" type="submit">Save</button></form>
+    ${s.budget ? `${bar(m.exp/s.budget*100, m.exp>s.budget?"bad":m.exp>s.budget*.8?"warn":"")}<span class="tiny muted">${inr(m.exp)} spent so far in ${MONTH[state.now.getMonth()]}</span>` : ""}
+  </div>
+  <div class="card">
+    <h3>Category limits</h3>
+    <span class="small muted">Optional. Leave blank for no limit. Saved when you leave the box.</span>
+    ${EXP_CATS.map((c,i) => { const v = m.cats[c]||0, lim = (s.catBudgets||{})[c]||"";
+      return `<div class="between"><div class="main"><span class="small" style="font-weight:600">${c}</span><span class="tiny muted">Spent ${inr(v)}</span></div>
+        <input class="field" style="width:120px" id="cb-${i}" data-cat="${esc(c)}" inputmode="numeric" placeholder="No limit" value="${lim}" aria-label="${esc(c)} limit"></div>`; }).join("")}
+  </div>`;
+}
+function renderWealth(){
+  const nw = netWorth(), s = settings();
+  const hist = [];
+  let lastV = null;
+  for (let i=5;i>=0;i--){ const d = shift("month", state.now, i), k = monthKey(d); if (s.nw && s.nw[k] !== undefined) lastV = s.nw[k]; if (lastV !== null) hist.push({label:MON[d.getMonth()], v:lastV}); }
+  const assets = byKind("asset"), liabs = byKind("liability"), funds = byKind("goal").filter(([,g]) => isMoney(g));
+  const types = {};
+  for (const [,a] of assets) types[a.type||"Other"] = (types[a.type||"Other"]||0) + (Number(a.value)||0);
+  const typeRows = Object.entries(types).sort((a,b)=>b[1]-a[1]);
+  const isL = state.liabMode;
+
+  return `<div class="card">
+    <span class="label">Net worth</span><span class="big ${nw.net<0?"neg":""}">${sinr(nw.net)}</span>
+    <div class="grid2 small"><div><span class="muted">Assets</span><div class="amt pos">${inr(nw.assets)}</div></div><div><span class="muted">Loans &amp; dues</span><div class="amt neg">${inr(nw.liab)}</div></div></div>
+    ${hist.length >= 2 ? lineChart(hist) : `<span class="tiny muted">Your net worth trend appears here month by month as you update values.</span>`}
+  </div>
+
+  ${typeRows.length ? `<div class="card"><h3>Asset mix</h3>${typeRows.map(([t,v]) => `<div style="display:flex;flex-direction:column;gap:5px"><div class="between small"><span>${esc(t)}</span><span><span class="amt">${short(v)}</span> <span class="muted tiny">${nw.assets?Math.round(v/nw.assets*100):0}%</span></span></div>${bar(nw.assets?v/nw.assets*100:0)}</div>`).join("")}</div>` : ""}
+
+  <form class="card" id="w-form" autocomplete="off">
+    <div class="toggle2" role="group" aria-label="Kind"><button type="button" data-act="wmode" data-k="asset" aria-pressed="${!isL}">Asset</button><button type="button" data-act="wmode" data-k="liab" aria-pressed="${isL}">Loan / due</button></div>
+    <input class="field" id="w-name" maxlength="60" placeholder="${isL ? "Name, e.g. HDFC credit card" : "Name, e.g. SBI savings, Nifty index fund"}" aria-label="Name">
+    <div class="grid2"><select class="field" id="w-type" data-live="1" aria-label="Type">${(isL?LIAB_TYPES:ASSET_TYPES).map(t=>`<option>${t}</option>`).join("")}</select>
+      <input class="field" id="w-val" inputmode="decimal" placeholder="${isL?"Amount owed ₹":"Current value ₹"}" aria-label="Value in rupees"></div>
+    <button class="btn block" type="submit">Add ${isL?"loan":"asset"}</button>
+  </form>
+
+  ${assets.length ? `<div class="sub">Assets</div><ul class="list">${assets.map(([id,a]) => wealthRow(id,a,false)).join("")}</ul>` : ""}
+  ${liabs.length ? `<div class="sub">Loans &amp; dues</div><ul class="list">${liabs.map(([id,a]) => wealthRow(id,a,true)).join("")}</ul>` : ""}
+  ${!assets.length && !liabs.length ? `<div class="empty"><p>Add your bank balance, investments, gold and any loans. LifeOS works out your net worth and tracks it every month.</p></div>` : ""}
+
+  <button class="card tap" data-act="go" data-tab="goals" data-goals="list">
+    <div class="between"><h3>Money goals</h3><span class="chip">${funds.length ? `${short(funds.reduce((t,[,g])=>t+(Number(g.saved)||0),0))} saved` : "Open goals"}</span></div>
+    ${funds.length ? funds.map(([,g]) => { const m = goalMoney(g); return `<div class="mini"><div class="between small"><span>${esc(g.title)}</span><span class="muted">${inr(m.saved)} / ${short(m.amount)}</span></div>${bar(m.pct, m.status==="done"?"good":"")}</div>`; }).join("")
+      : `<span class="small muted">Emergency fund, bike, wedding, house: set a target and a date in Goals, and LifeOS works out the monthly amount.</span>`}
+  </button>`;
+}
+function wealthRow(id, a, isL){
+  const upd = a.updated ? new Date(a.updated) : null;
+  return `<li><span class="cat ${isL?"":"inc"}">${initials(a.type)}</span>
+    <div class="main"><span class="title">${esc(a.name)}</span><span class="meta">${esc(a.type)}${upd?` · updated ${upd.getDate()} ${MON[upd.getMonth()]}`:""}</span></div>
+    <input class="field" style="width:104px;padding:7px 9px;text-align:right" id="wv-${id}" data-wid="${id}" inputmode="decimal" value="${Math.round(Number(a.value)||0)}" aria-label="Value of ${esc(a.name)}">
+    ${delBtn(id)}</li>`;
+}
+
+/* HEALTH */
+function renderHealth(){
+  const s = settings(), k = dayKey(state.now), h = healthDay(k);
+  const metrics = {water:["Water","glasses",s.waterGoal], sleep:["Sleep","hours",s.sleepGoal], steps:["Steps","steps",s.stepsGoal], workout:["Workout","min",s.workoutGoal], weight:["Weight","kg",0]};
+  const mk = state.hmetric;
+  const vals = []; for (let i=6;i>=0;i--){ const d = shift("day", state.now, i), hd = healthDay(dayKey(d)); vals.push({label:DAYS[d.getDay()].slice(0,2), v:Number(hd[mk])||0}); }
+  const weights = byKind("health").filter(([,x])=>x.weight).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+  const lastW = weights.length ? weights[weights.length-1][1] : null, firstW = weights.length ? weights[Math.max(0, weights.length-30)][1] : null;
+  const fmtSteps = v => v >= 1000 ? (v/1000).toFixed(1).replace(/\.0$/,"")+"k" : v;
+  const metricInput = (key, label, unit, goal, step) => `<div class="card metric"><span class="label">${label}</span>
+    <div class="row"><input class="field" id="hm-${key}" data-h="${key}" inputmode="decimal" placeholder="0" value="${h[key]??""}" aria-label="${label} in ${unit}" style="flex:1"><span class="unit">${unit}</span></div>
+    ${goal ? bar((Number(h[key])||0)/goal*100, (Number(h[key])||0)>=goal?"good":"") + `<span class="tiny muted">Goal ${Number(goal).toLocaleString("en-IN")} ${unit}</span>` : ""}</div>`;
+
+  return `<div class="card">
+    <div class="between"><span class="label">Water today</span><span class="chip ${(h.water||0)>=s.waterGoal?"good":""}">${(h.water||0)>=s.waterGoal?"Goal reached":`${s.waterGoal-(h.water||0)} more to go`}</span></div>
+    <div class="between">
+      <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal} glasses</span></span>
+      <div class="stepper"><button data-act="water" data-d="-1" aria-label="Remove a glass">−</button><button data-act="water" data-d="1" aria-label="Add a glass">+</button></div>
+    </div>
+    ${bar((h.water||0)/s.waterGoal*100, (h.water||0)>=s.waterGoal?"good":"")}
+  </div>
+  <div class="grid2">
+    ${metricInput("sleep","Sleep","hours",s.sleepGoal)}
+    ${metricInput("steps","Steps","steps",s.stepsGoal)}
+    ${metricInput("workout","Workout","min",s.workoutGoal)}
+    ${metricInput("weight","Weight","kg",0)}
+  </div>
+  ${lastW ? `<div class="card"><div class="between"><span class="label">Weight</span><span class="small muted">Last logged ${parseDay(lastW.date).getDate()} ${MON[parseDay(lastW.date).getMonth()]}</span></div>
+    <div class="between"><span class="big">${lastW.weight}<span class="unit"> kg</span></span>${firstW && firstW!==lastW ? (() => { const dlt = (lastW.weight - firstW.weight); return `<span class="chip ${dlt<=0?"good":"warn"}">${dlt>0?"+":""}${dlt.toFixed(1)} kg since ${parseDay(firstW.date).getDate()} ${MON[parseDay(firstW.date).getMonth()]}</span>`; })() : ""}</div></div>` : ""}
+  <div class="card">
+    <div class="between"><h3>Last 7 days</h3></div>
+    ${seg(Object.entries(metrics).map(([k2,[l]])=>[k2,l]), mk, "hmetric")}
+    ${barChart(vals, metrics[mk][2], mk==="steps" ? fmtSteps : null)}
+    <span class="tiny muted">${metrics[mk][2] ? `Dashed line: goal of ${Number(metrics[mk][2]).toLocaleString("en-IN")} ${metrics[mk][1]}` : `In ${metrics[mk][1]}`}</span>
+  </div>
+  <div class="card">
+    <h3>Daily goals</h3>
+    <form class="stack" id="hg-form">
+      <div class="grid2">
+        <label class="flabel" for="g-water">Water <span>glasses</span><input class="field" id="g-water" inputmode="numeric" value="${s.waterGoal}"></label>
+        <label class="flabel" for="g-sleep">Sleep <span>hours</span><input class="field" id="g-sleep" inputmode="decimal" value="${s.sleepGoal}"></label>
+        <label class="flabel" for="g-steps">Steps <span>per day</span><input class="field" id="g-steps" inputmode="numeric" value="${s.stepsGoal}"></label>
+        <label class="flabel" for="g-workout">Workout <span>minutes</span><input class="field" id="g-workout" inputmode="numeric" value="${s.workoutGoal}"></label>
+      </div>
+      <button class="btn ghost" type="submit">Save goals</button>
+    </form>
+  </div>`;
+}
+
+/* MORE: journal, reminders, backup */
+function renderMore(){
+  const tabs = seg([["journal","Journal"],["reminders","Reminders"],["app","App & backup"]], state.more, "more");
+  if (state.more==="reminders") return tabs + renderReminders();
+  if (state.more==="app" || state.more==="backup") return tabs + renderAppInfo() + renderBackup();
+  return tabs + renderJournal();
+}
+function journalEntry(date){ return state.items.get("j-"+date) || null; }
+function ensureDraft(){
+  if (!state.jdate) state.jdate = dayKey(state.now);
+  if (!state.jdraft || state.jdraft.date !== state.jdate){
+    const e = journalEntry(state.jdate);
+    state.jdraft = {date:state.jdate, mood:e?.mood||"", good:e?.good||"", better:e?.better||"", notes:e?.notes||""};
+    state.jsaved = false;
+  }
+}
+function renderJournal(){
+  ensureDraft();
+  const today = dayKey(state.now), jd = parseDay(state.jdate), dr = state.jdraft;
+  const label = state.jdate===today ? "Today" : state.jdate===dayKey(shift("day", state.now, 1)) ? "Yesterday" : DAYS[jd.getDay()];
+  const entries = byKind("journal").filter(([,j])=>hasContent(j)).sort((a,b)=> a[1].date < b[1].date ? 1 : -1);
+  const s = streak(journalLog());
+  return `<div class="monthnav"><button data-act="jprev" aria-label="Previous day">‹</button><strong>${label} · ${jd.getDate()} ${MON[jd.getMonth()]}</strong><button data-act="jnext" aria-label="Next day" ${state.jdate>=today?"disabled":""}>›</button></div>
+    <div class="card">
+      <div class="between"><span class="label">How was the day?</span><span class="tiny muted">${entries.length} entr${entries.length===1?"y":"ies"}${s?` · ${s}-day streak`:""}</span></div>
+      <div class="moods">${MOODS.map(([v,l]) => `<button class="mood" data-act="mood" data-v="${v}" aria-pressed="${dr.mood===v}">${l}</button>`).join("")}</div>
+      <label class="flabel" for="j-good">What went well <span>Small wins count.</span><textarea class="field" id="j-good" data-j="good" maxlength="2000">${esc(dr.good)}</textarea></label>
+      <label class="flabel" for="j-better">What I'll do better tomorrow<textarea class="field" id="j-better" data-j="better" maxlength="2000">${esc(dr.better)}</textarea></label>
+      <label class="flabel" for="j-notes">Notes, thoughts, gratitude<textarea class="field" id="j-notes" data-j="notes" maxlength="5000" style="min-height:110px">${esc(dr.notes)}</textarea></label>
+      <div class="between"><span>${state.jsaved ? `<span class="chip good">Saved</span>` : ""}</span><span class="inline">${journalEntry(state.jdate) ? delBtn("j-"+state.jdate) : ""}<button class="btn" data-act="jsave">Save entry</button></span></div>
+    </div>
+    ${entries.length ? `<div class="sub">Past entries</div><ul class="list">${entries.slice(0,60).map(([,j]) => {
+      const dd = parseDay(j.date), m = MOODS.find(x=>x[0]===j.mood);
+      const text = [j.good, j.better, j.notes].map(x=>(x||"").trim()).filter(Boolean).join(" · ");
+      return `<li class="entry" data-act="jopen" data-date="${j.date}"><div class="d"><b>${dd.getDate()}</b>${MON[dd.getMonth()]}</div>
+        <div class="main">${m ? `<span class="meta"><span class="chip">${m[1]}</span></span>` : ""}<span class="excerpt">${esc(text || "Mood only")}</span></div></li>`;
+    }).join("")}</ul>` : ""}`;
+}
+function renderReminders(){
+  const list = byKind("reminder").sort((a,b)=> (a[1].time||"").localeCompare(b[1].time||""));
+  let notice = "";
+  if (!bridge) notice = `<div class="notice">Reminder notifications work in the Android app.</div>`;
+  else if (list.length && !notifAllowed()) notice = `<div class="notice"><span>Notifications are off, so reminders can't show up.</span><button class="btn" data-act="notif">Allow</button></div>`;
+  const have = new Set(list.map(([,r])=>r.title));
+  const presets = PRESETS.map((p,i)=>[p,i]).filter(([p])=>!have.has(p.title));
+  return `${notice}
+    <form class="card" id="rem-form" autocomplete="off">
+      <h3>New reminder</h3>
+      <input class="field" id="r-title" maxlength="100" placeholder="Remind me to…" aria-label="Reminder text">
+      <div class="grid2">
+        <input class="field" id="r-time" type="time" value="07:00" aria-label="Time">
+        <select class="field" id="r-repeat" aria-label="Repeat">${Object.entries(REPEATS).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
+      </div>
+      <div id="r-date-wrap" hidden><input class="field" id="r-date" type="date" value="${dayKey(state.now)}" min="${dayKey(state.now)}" aria-label="Date"></div>
+      <div id="r-dom-wrap" hidden><label class="flabel" for="r-dom">Day of the month <span>1 to 31. In shorter months it fires on the last day.</span><input class="field" id="r-dom" inputmode="numeric" value="5"></label></div>
+      <button class="btn block" type="submit">Add reminder</button>
+      ${presets.length ? `<span class="tiny muted">Quick add</span><div class="presets">${presets.map(([p,i]) => `<button type="button" data-act="preset" data-i="${i}">${esc(p.title)} · ${p.repeat==="monthly" ? `${p.dom}th monthly` : p.time}</button>`).join("")}</div>` : ""}
+    </form>
+    ${list.length ? `<ul class="list">${list.map(([id,r]) => {
+      const nf = nextFire(r, state.now), on = r.enabled!==false;
+      const rep = r.repeat==="once" ? (()=>{ const dd = parseDay(r.date); return `Once · ${dd.getDate()} ${MON[dd.getMonth()]}`; })()
+        : r.repeat==="monthly" ? `Every month on day ${r.dom}` : REPEATS[r.repeat]||"Every day";
+      return `<li class="${on?"":"off"}"><span class="rtime">${esc(r.time)}</span>
+        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta"><span>${esc(rep)}</span>${on ? (nf ? `<span class="chip">Next: ${esc(whenLabel(nf))}</span>` : `<span class="chip warn">Finished</span>`) : `<span>Paused</span>`}</span></div>
+        <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>
+        ${delBtn(id)}</li>`;
+    }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}`;
+}
+function renderBackup(){
+  return `<div class="card">
+    <h3>Your data stays on this phone</h3>
+    <span class="small muted">Uninstalling LifeOS or clearing its data deletes everything. Make a backup regularly: share it to WhatsApp (to yourself), Google Drive or email.</span>
+    <button class="btn" data-act="export">${bridge ? "Share backup" : "Copy backup"}</button>
+  </div>
+  <div class="card">
+    <h3>Restore</h3>
+    <label class="flabel" for="b-in">Paste the backup text <span>Items with the same id are replaced; everything else is kept.</span>
+      <textarea class="field" id="b-in" style="min-height:110px" placeholder='{"app":"lifeos",...}'></textarea></label>
+    <button class="btn ghost" data-act="import">Restore backup</button>
+    <span class="tiny muted">${state.items.size} items stored on this phone</span>
+  </div>`;
+}
+
+/* ---------- actions ---------- */
+let armed = null, armTimer = null;
+function go(tab, sub){
+  state.tab = tab;
+  if (sub){ for (const [k,v] of Object.entries(sub)) if (v) state[k] = v; }
+  saveView(); render(); window.scrollTo(0,0);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id, it = id ? state.items.get(id) : null;
+  if (act==="go"){ go(b.dataset.tab, {plan:b.dataset.plan, money:b.dataset.money, more:b.dataset.more, goals:b.dataset.goals}); return; }
+  if (act==="plan" || act==="money" || act==="more" || act==="goals"){ state[act] = b.dataset.k; saveView(); render(); return; }
+  if (act==="area"){ state.area = b.dataset.k; render(); return; }
+  if (act==="gmode"){ const t = document.getElementById("g-title"); state.goalTitle = t ? t.value : ""; state.goalMode = b.dataset.k; render(); return; }
+  if (act==="area-goal"){ state.goalArea = b.dataset.k; state.goalMode = b.dataset.k==="wealth" ? "money" : "progress"; state.goalTitle = ""; go("goals", {goals:"list"}); setTimeout(()=>{ const t = document.getElementById("g-title"); t && t.focus(); }, 50); return; }
+  if (act==="area-habit"){ state.planArea = b.dataset.k; go("plan", {plan:"daily"}); setTimeout(()=>{ const t = document.getElementById("new-title"); t && t.focus(); }, 50); return; }
+  if (act==="tip"){
+    const t = state.lastTips && state.lastTips[Number(b.dataset.i)]; if (!t) return;
+    if (t.habit){ setItem(newId(), {kind:"daily", title:t.habit, area:state.area || (lifeScores().weakest||{}).k || guessArea(t.habit), log:{}, created:Date.now()}); toast(`Habit added: ${t.habit}`); }
+    else if (t.goal){ state.goalTitle = t.goal.title; state.goalAmount = t.goal.amount || ""; state.goalArea = guessArea(t.goal.title)==="personal" ? (state.area||"personal") : guessArea(t.goal.title); state.goalMode = t.goal.amount !== undefined ? "money" : "progress"; go("goals", {goals:"list"}); }
+    else if (t.preset !== undefined){ const p = PRESETS[t.preset]; addReminder({kind:"reminder", title:p.title, time:p.time, repeat:p.repeat, date:"", dom:p.dom||1, enabled:true, created:Date.now()}); }
+    return;
+  }
+  if (act==="contrib" && it){
+    const inp = document.getElementById("gc-"+id), raw = inp && inp.value.trim();
+    const m = goalMoney(it), v = raw ? num(raw) : (m.upcoming ? NaN : Math.max(0, m.needed - m.thisMonth));
+    if (!isFinite(v) || v===0){ toast("Enter the amount you put aside. Use a minus sign to take money out."); return; }
+    const cm = monthKey(state.now), contrib = {...(it.contrib||{})};
+    contrib[cm] = Math.max(0, (Number(contrib[cm])||0) + v);
+    const saved = Math.max(0, (Number(it.saved)||0) + v);
+    updateItem(id, {contrib, saved});
+    toast(saved >= m.amount ? `Goal reached: ${it.title}` : `${v>0?"Added":"Removed"} ${inr(v)} · ${it.title}`);
+    return;
+  }
+  if (act==="hmetric"){ state.hmetric = b.dataset.k; render(); return; }
+  if (act==="txtype"){ state.txType = b.dataset.k; render(); return; }
+  if (act==="wmode"){ state.liabMode = b.dataset.k==="liab"; render(); return; }
+  if (act==="quick-exp"){ state.txType = "expense"; state.month = monthKey(state.now); go("money", {money:"spend"}); setTimeout(()=>{ const a = document.getElementById("tx-amt"); a && a.focus(); }, 50); return; }
+
+  if (act==="toggle" && it){
+    const kd = planOf(it.kind), key = periodKey(kd.period, state.now), log = {...(it.log||{})};
+    if (log[key]) delete log[key]; else log[key] = Date.now();
+    if (kd.period==="day"){ const cutoff = dayKey(shift("day", state.now, 800)); for (const k of Object.keys(log)) if (k < cutoff) delete log[k]; }
+    updateItem(id, {log});
+  }
+  if (act==="todo" && it) updateItem(id, {done:!it.done, doneAt: it.done ? null : Date.now()});
+  if (act==="edit"){ state.editing = state.editing===id ? null : id; render(); return; }
+  if (act==="ed-cancel"){ state.editing = null; render(); return; }
+  if (act==="ed-save" && it){
+    const title = valOf("ed-title").trim();
+    if (!title){ toast("The task needs a name."); return; }
+    const next = {...it, title, area: valOf("ed-area") || itemArea(it)};
+    delete next.win;
+    if (it.kind==="yearly"){ const r = readPeriod("ed"); if (r.err){ toast(r.err); return; } next.period = r.p; }
+    state.items.set(id, next);
+    toast(next.period ? `Saved · ${periodLabel(next.period)}` : "Saved");
+    state.editing = null; afterChange(it.kind); return;
+  }
+  if (act==="ge-cancel"){ state.editing = null; render(); return; }
+  if (act==="ge-save" && it){
+    const title = valOf("ge-title").trim(), start = valOf("ge-start"), by = valOf("ge-by");
+    if (!title){ toast("The goal needs a name."); return; }
+    if (!/^\d{4}-\d{2}$/.test(start) || !/^\d{4}-\d{2}$/.test(by)){ toast("Pick both months."); return; }
+    if (by < start){ toast("\"Reach it by\" must be on or after \"Start from\"."); return; }
+    const next = {...it, title, area: valOf("ge-area") || itemArea(it), start, by};
+    delete next.target;
+    if (isMoney(it)){ const a = num(valOf("ge-amt")); if (!isFinite(a) || a <= 0){ toast("Enter the target amount in rupees."); return; } next.amount = a; }
+    state.items.set(id, next); state.editing = null; afterChange("goal");
+    toast(isMoney(next) && goalMoney(next).status!=="done" ? `Saved · ${inr(goalMoney(next).needed)} a month` : "Saved");
+    return;
+  }
+  if (act==="pset"){
+    const p = b.dataset.p, f = document.getElementById(p+"-pfrom"), t = document.getElementById(p+"-pto");
+    if (f && t){ f.value = b.dataset.f; t.value = b.dataset.t; }
+    return;
+  }
+  if (act==="prog" && it) updateItem(id, {progress: Math.max(0, Math.min(100, (it.progress||0) + Number(b.dataset.d)))});
+  if (act==="del"){
+    if (armed === id){ clearTimeout(armTimer); armed = null; if (id.startsWith("j-")) state.jdraft = null; removeItem(id); return; }
+    document.querySelectorAll(".del.arm").forEach(x=>{ x.classList.remove("arm"); x.textContent = x.dataset.label || "Delete"; });
+    b.dataset.label = b.textContent; armed = id; b.classList.add("arm"); b.textContent = "Confirm";
+    clearTimeout(armTimer); armTimer = setTimeout(()=>{ armed=null; b.classList.remove("arm"); b.textContent = b.dataset.label; }, 3500);
+  }
+  if (act==="clear-done"){ byKind("todo").filter(([,t])=>t.done).forEach(([tid])=>state.items.delete(tid)); afterChange("todo"); }
+  if (act==="starter"){
+    const base = Date.now();
+    STARTER.forEach(([kind,title,area],i) => {
+      const data = {kind, title, area, created: base+i};
+      if (kind==="todo") data.done = false;
+      if (kind==="yearly"){ const y = state.now.getFullYear(); data.done = false; data.period = {from:`${y}-01`, to:`${y}-12`}; }
+      else if (planOf(kind).period) data.log = {};
+      state.items.set(newId()+i, data);
+    });
+    if (!byKind("goal").length){
+      state.items.set(newId()+"g1", {kind:"goal", mode:"money", title:"Build a 6-month emergency fund", area:"wealth", amount:300000, saved:0, by:monthKey(new Date(state.now.getFullYear()+1, state.now.getMonth(), 1)), contrib:{}, created:base+20});
+      state.items.set(newId()+"g2", {kind:"goal", mode:"progress", title:"Run 5 km without stopping", area:"health", progress:0, target:state.now.getFullYear()+1, created:base+21});
+    }
+    afterChange("todo"); toast("Starter plan added");
+  }
+  /* money */
+  if (act==="mprev" || act==="mnext"){
+    const d = parseDay(state.month+"-01"); d.setMonth(d.getMonth() + (act==="mprev" ? -1 : 1));
+    if (monthKey(d) > monthKey(state.now)) return;
+    state.month = monthKey(d); render();
+  }
+  /* health */
+  if (act==="water"){
+    const k = dayKey(state.now), cur = Number(healthDay(k).water)||0, nv = Math.max(0, cur + Number(b.dataset.d));
+    setHealth(k, {water:nv});
+    if (state.tab==="home") toast(`Water: ${nv} glass${nv===1?"":"es"} today`);
+  }
+  /* journal */
+  if (act==="jprev" || act==="jnext"){
+    const dd = shift("day", parseDay(state.jdate), act==="jprev" ? 1 : -1);
+    if (dayKey(dd) > dayKey(state.now)) return;
+    state.jdate = dayKey(dd); state.jdraft = null; render();
+  }
+  if (act==="jopen"){ state.jdate = b.dataset.date; state.jdraft = null; render(); window.scrollTo(0,0); }
+  if (act==="mood"){ ensureDraft(); state.jdraft.mood = state.jdraft.mood===b.dataset.v ? "" : b.dataset.v; state.jsaved = false; render(); }
+  if (act==="jsave"){
+    ensureDraft();
+    const dr = state.jdraft, jid = "j-"+dr.date, prev = state.items.get(jid);
+    if (!hasContent(dr) && !prev){ toast("Write something or pick a mood first."); return; }
+    state.items.set(jid, {kind:"journal", date:dr.date, mood:dr.mood, good:dr.good, better:dr.better, notes:dr.notes, created: prev?.created || Date.now(), updated: Date.now()});
+    state.jsaved = true; afterChange("journal"); toast("Journal saved");
+  }
+  /* reminders */
+  if (act==="ron" && it) updateItem(id, {enabled: it.enabled===false});
+  if (act==="check-update"){ checkUpdate(true); return; }
+  if (act==="notif"){ try { bridge.requestNotifications(); } catch(_){} }
+  if (act==="preset"){
+    const p = PRESETS[Number(b.dataset.i)]; if (!p) return;
+    addReminder({kind:"reminder", title:p.title, time:p.time, repeat:p.repeat, date:"", dom:p.dom||1, enabled:true, created:Date.now()});
+  }
+  /* backup */
+  if (act==="export"){
+    const text = JSON.stringify({app:"lifeos", version:2, exported:new Date().toISOString(), items:Object.fromEntries(state.items)});
+    if (bridge){ try { bridge.share(text, "LifeOS backup " + dayKey(state.now)); } catch(_){} }
+    else if (navigator.clipboard) navigator.clipboard.writeText(text).then(()=>toast("Backup copied"), ()=>toast("Couldn't copy. Try again."));
+  }
+  if (act==="import"){
+    try {
+      const data = JSON.parse(document.getElementById("b-in").value.trim());
+      if (!data || !["lifeos","vaazhkai-tracker"].includes(data.app) || typeof data.items!=="object") throw new Error();
+      let n = 0;
+      for (const [k,v] of Object.entries(data.items)) if (v && typeof v==="object" && typeof v.kind==="string"){ state.items.set(k,v); n++; }
+      state.jdraft = null; afterChange("*"); toast(`Restored ${n} items`);
+    } catch(_){ toast("That isn't a LifeOS backup. Paste the full backup text."); }
+  }
+});
+
+function addReminder(r){
+  if (bridge && !notifAllowed()) { try { bridge.requestNotifications(); } catch(_){} }
+  setItem(newId(), r);
+  toast("Reminder set · " + whenLabel(nextFire(r, new Date())));
+}
+
+document.addEventListener("input", e => {
+  const k = e.target.dataset && e.target.dataset.j;
+  if (k){ ensureDraft(); state.jdraft[k] = e.target.value; if (state.jsaved){ state.jsaved = false; } }
+  if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.id==="r-repeat") syncFormVisibility();
+  if (t.id==="g-area") state.goalArea = t.value;
+  if (t.dataset.h){
+    const v = t.value.trim()==="" ? null : num(t.value);
+    if (v !== null && (!isFinite(v) || v < 0)){ toast("Enter a number."); return; }
+    setHealth(dayKey(state.now), {[t.dataset.h]: v});
+  }
+  if (t.dataset.cat){
+    const v = t.value.trim()==="" ? 0 : num(t.value);
+    if (!isFinite(v) || v < 0){ toast("Enter an amount in rupees."); return; }
+    const cb = {...(settings().catBudgets||{})}; if (v) cb[t.dataset.cat] = v; else delete cb[t.dataset.cat];
+    saveSettings({catBudgets:cb}, true); toast(v ? `${t.dataset.cat} limit: ${inr(v)}` : `${t.dataset.cat}: no limit`);
+  }
+  if (t.dataset.wid){
+    const v = num(t.value);
+    if (!isFinite(v) || v < 0){ toast("Enter the current value in rupees."); return; }
+    updateItem(t.dataset.wid, {value:v, updated:Date.now()}); toast("Value updated");
+  }
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, val = id => (document.getElementById(id)||{}).value || "";
+  const clear = (...ids) => ids.forEach(id => { const el = document.getElementById(id); if (el){ el.value = ""; el.dataset.keep = "no"; } });
+
+  if (f.id==="add-form"){
+    const title = val("new-title").trim(); if (!title) return;
+    const kind = state.plan, data = {kind, title, area: val("new-area") || guessArea(title), created: Date.now()};
+    if (kind==="yearly"){
+      const r = readPeriod("nw"); if (r.err){ toast(r.err); return; }
+      data.period = r.p; data.done = false;
+      clear("new-title");
+      ["nw-pfrom","nw-pto"].forEach(x => { const el = document.getElementById(x); if (el) el.dataset.keep = "no"; });
+      setItem(newId(), data);
+      toast(`Added · complete within ${periodLabel(r.p)}`);
+      return;
+    }
+    if (planOf(kind).period) data.log = {};
+    if (kind==="todo") data.done = false;
+    clear("new-title"); setItem(newId(), data);
+  }
+  if (f.id==="g-form"){
+    const title = val("g-title").trim(), area = val("g-area") || "personal";
+    if (!title){ toast("Give the goal a name."); document.getElementById("g-title").focus(); return; }
+    let data;
+    if (state.goalMode==="money"){
+      const amount = num(val("g-amt")), saved = val("g-saved").trim() ? num(val("g-saved")) : 0;
+      if (!isFinite(amount) || amount <= 0){ toast("Enter the target amount in rupees."); return; }
+      if (!isFinite(saved) || saved < 0){ toast("Saved so far must be a number."); return; }
+      data = {kind:"goal", mode:"money", title, area, amount, saved, contrib:{}, created:Date.now()};
+    } else {
+      data = {kind:"goal", mode:"progress", title, area, progress:0, created:Date.now()};
+    }
+    const start = val("g-start"), by = val("g-by");
+    if (!/^\d{4}-\d{2}$/.test(start)){ toast("Pick a start month."); return; }
+    if (!/^\d{4}-\d{2}$/.test(by) || by < monthKey(state.now)){ toast("Pick a \"Reach it by\" month from this month onward."); return; }
+    if (by < start){ toast("\"Reach it by\" must be on or after \"Start from\"."); return; }
+    data.start = start; data.by = by;
+    state.goalTitle = ""; state.goalAmount = ""; state.goalArea = area;
+    clear("g-title","g-amt","g-saved");
+    ["g-start","g-by"].forEach(x => { const el = document.getElementById(x); if (el) el.dataset.keep = "no"; });
+    setItem(newId(), data);
+    if (data.mode==="money") toast(`Goal added · put aside ${inr(goalMoney(data).needed)} a month`); else toast("Goal added");
+  }
+  if (f.id==="tx-form"){
+    const amount = num(val("tx-amt"));
+    if (!isFinite(amount) || amount <= 0){ toast("Enter the amount in rupees."); document.getElementById("tx-amt").focus(); return; }
+    const date = val("tx-date") || dayKey(state.now);
+    clear("tx-amt","tx-note");
+    setItem(newId(), {kind:"txn", type:state.txType, amount, category:val("tx-cat"), note:val("tx-note").trim() || "", date, created:Date.now()});
+    toast(`${state.txType==="income"?"Income":"Expense"} added · ${inr(amount)}`);
+  }
+  if (f.id==="budget-form"){
+    const v = val("b-total").trim()==="" ? 0 : num(val("b-total"));
+    if (!isFinite(v) || v < 0){ toast("Enter the budget in rupees."); return; }
+    saveSettings({budget:v}); toast(v ? `Budget set to ${inr(v)}` : "Budget removed");
+  }
+  if (f.id==="w-form"){
+    const name = val("w-name").trim(), v = num(val("w-val"));
+    if (!name){ toast("Give it a name."); return; }
+    if (!isFinite(v) || v < 0){ toast("Enter the value in rupees."); return; }
+    clear("w-name","w-val");
+    setItem(newId(), {kind: state.liabMode ? "liability" : "asset", name, type:val("w-type"), value:v, created:Date.now(), updated:Date.now()});
+  }
+  if (f.id==="hg-form"){
+    const g = k => num(val(k));
+    const patch = {waterGoal:g("g-water"), sleepGoal:g("g-sleep"), stepsGoal:g("g-steps"), workoutGoal:g("g-workout")};
+    if (Object.values(patch).some(v => !isFinite(v) || v <= 0)){ toast("Each goal needs a number above zero."); return; }
+    saveSettings(patch); toast("Goals saved");
+  }
+  if (f.id==="rem-form"){
+    const title = val("r-title").trim(), time = val("r-time"), repeat = val("r-repeat");
+    if (!title){ toast("Type what to remind you about."); document.getElementById("r-title").focus(); return; }
+    if (!/^\d\d:\d\d$/.test(time)){ toast("Pick a time."); return; }
+    const dom = parseInt(val("r-dom"), 10);
+    if (repeat==="monthly" && !(dom >= 1 && dom <= 31)){ toast("Day of the month must be 1 to 31."); return; }
+    const r = {kind:"reminder", title, time, repeat, date: repeat==="once" ? val("r-date") : "", dom: repeat==="monthly" ? dom : 1, enabled:true, created:Date.now()};
+    if (repeat==="once" && !nextFire(r, new Date())){ toast("That date and time has already passed."); return; }
+    clear("r-title"); addReminder(r);
+  }
+});
+
+/* clock: roll over at midnight, refresh "next" labels */
+setInterval(()=>{
+  const n = new Date(), changed = dayKey(n)!==dayKey(state.now); state.now = n;
+  if (changed && state.jdraft && !hasContent(state.jdraft)){ state.jdate = null; state.jdraft = null; }
+  const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (changed || (!typing && !state.editing && (state.tab==="home" || state.tab==="more" || state.tab==="plan"))) render();
+}, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden){ state.now = new Date(); const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (!typing) render(); } });
+
+/* one-time upgrade: savings funds from the earlier version become money goals,
+   yearly tasks get a period (this year), and the old time windows are dropped */
+{
+  let moved = 0;
+  const y = state.now.getFullYear();
+  for (const [id,v] of [...state.items.entries()]){
+    if (v && v.kind==="yearly" && !v.period){
+      const doneAt = (v.log||{})[String(y)];
+      state.items.set(id, {...v, period:{from:`${y}-01`, to:`${y}-12`}, done:!!doneAt, doneAt: typeof doneAt==="number" ? doneAt : (doneAt ? Date.now() : null)});
+      moved++;
+    }
+    if (v && v.win){ const n = {...state.items.get(id)}; delete n.win; state.items.set(id, n); moved++; }
+  }
+  for (const [id,v] of [...state.items.entries()]) if (v && v.kind==="fund"){
+    state.items.set(id, {kind:"goal", mode:"money", title:v.name||"Savings fund", area:"wealth", amount:Number(v.target)||0, saved:Number(v.saved)||0,
+      by:monthKey(new Date(state.now.getFullYear()+1, state.now.getMonth(), 1)), contrib:{}, created:v.created||Date.now()});
+    moved++;
+  }
+  if (moved) persist();
+}
+if (state.items.size && byKind("asset").length + byKind("liability").length) { snapshotNetWorth(); persist(); }
+syncReminders();
+render();
+checkUpdate(false);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) maybeCheckUpdate(); });
+})();
+</script>
+</body>
+</html>
