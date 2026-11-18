@@ -227,18 +227,20 @@ const PLAN = [
 const AREAS = [
   {k:"health",   label:"Health",   goal:"Run 5 km without stopping",      habit:"Workout 30 minutes"},
   {k:"wealth",   label:"Wealth",   goal:"Build a 6-month emergency fund", habit:"Log today's expenses"},
+  {k:"work",     label:"Work",     goal:"Finish this quarter's main project", habit:"Plan tomorrow's work before leaving"},
   {k:"career",   label:"Career",   goal:"Move to a better-paying role",   habit:"1 hour of focused skill work"},
   {k:"learning", label:"Learning", goal:"Finish one online course",       habit:"Read 10 pages"},
   {k:"family",   label:"Family",   goal:"Plan a family trip",             habit:"Call parents"},
   {k:"mind",     label:"Mind",     goal:"Build a calm morning routine",   habit:"10 minutes meditation"},
   {k:"personal", label:"Personal", goal:"Learn to swim",                  habit:"Wake up before 6 AM"}
 ];
-const areaOf = k => AREAS.find(a=>a.k===k) || AREAS[6];
+const areaOf = k => AREAS.find(a=>a.k===k) || AREAS.find(a=>a.k==="personal");
 function guessArea(t){
   t = String(t||"").toLowerCase();
   if (/work ?out|gym|run|walk|water|sleep|diet|health|weight|yoga|steps|fit|doctor|insurance|checkup/.test(t)) return "health";
   if (/sav|invest|sip|bill|budget|debt|loan|expense|spend|money|fund|income|salary|stock|trad|emi|wealth|rich/.test(t)) return "wealth";
-  if (/career|job|promot|office|client|business|interview|resume|skill/.test(t)) return "career";
+  if (/\bwork\b|office|meeting|project|deadline|report|client|presentation|email|boss|team|shift/.test(t)) return "work";
+  if (/career|job|promot|business|interview|resume|skill/.test(t)) return "career";
   if (/read|learn|course|study|book|exam|language|class/.test(t)) return "learning";
   if (/family|call|parent|amma|appa|friend|wife|husband|kid|trip/.test(t)) return "family";
   if (/journal|meditat|pray|gratitude|mind|calm|stress|mood/.test(t)) return "mind";
@@ -1201,7 +1203,7 @@ function mapSvg(sc, sel){
       <text x="${x.toFixed(1)}" y="${(y+r+13).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--faint)">${a.goals} goal${a.goals===1?"":"s"} · ${a.habits} habit${a.habits===1?"":"s"}</text>
     </g>`;
   });
-  return `<svg class="mindmap" viewBox="0 0 360 336" role="group" aria-label="Life map">
+  return `<svg class="mindmap" viewBox="0 0 360 352" role="group" aria-label="Life map">
     <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>
     ${lines}
     <circle cx="${cx}" cy="${cy}" r="44" fill="var(--blue)"/>
