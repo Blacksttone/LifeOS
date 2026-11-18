@@ -12,6 +12,26 @@ public class Bridge {
     @JavascriptInterface
     public boolean isApp() { return true; }
 
+    /* Location reminders */
+    @JavascriptInterface
+    public String locationStatus() { return Geo.status(activity); }
+
+    @JavascriptInterface
+    public void requestLocation(boolean background) { activity.runOnUiThread(() -> activity.requestLocationPermission(background)); }
+
+    @JavascriptInterface
+    public void openAppSettings() { activity.runOnUiThread(activity::openAppSettings); }
+
+    @JavascriptInterface
+    public void getLocation(String id) { activity.runOnUiThread(() -> activity.currentLocation(id)); }
+
+    @JavascriptInterface
+    public void setGeofences(String json) {
+        Geo.save(activity, json);
+        activity.runOnUiThread(() -> Geo.registerAll(activity, (ok, msg) ->
+                activity.runJs("window.__geoStatus && window.__geoStatus(" + ok + "," + org.json.JSONObject.quote(msg) + ")")));
+    }
+
     /* Backup to a file (Google Drive or anywhere the system picker offers). */
     @JavascriptInterface
     public void backupPick(String json, String name) { activity.backups.pickAndSave(json, name); }

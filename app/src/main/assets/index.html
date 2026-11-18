@@ -354,6 +354,7 @@ function setItem(id, data){ state.items.set(id, data); afterChange(data.kind); }
 function updateItem(id, patch){ const cur = state.items.get(id); if (!cur) return; state.items.set(id, {...cur, ...patch}); afterChange(cur.kind); }
 function removeItem(id){
   const cur = state.items.get(id); state.items.delete(id);
+  if (cur && cur.kind==="place") for (const [rid,r] of [...state.items.entries()]) if (r && r.kind==="georem" && r.placeId===id) state.items.delete(rid);
   let linked = false;
   for (const [rid,r] of [...state.items.entries()]) if (r && r.kind==="reminder" && r.link===id){ state.items.delete(rid); linked = true; }
   if (state.editing===id) state.editing = null;
@@ -363,6 +364,7 @@ function afterChange(kind){
   if (kind==="asset" || kind==="liability" || kind==="*") snapshotNetWorth();
   persist();
   if (kind==="reminder" || kind==="*") syncReminders();
+  if (kind==="place" || kind==="georem" || kind==="*") syncGeofences();
   render();
 }
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -373,6 +375,76 @@ function syncReminders(){
   if (!bridge) return;
   const list = byKind("reminder").map(([,r]) => ({title:r.title, time:r.time, repeat:r.repeat, date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false}));
   try { bridge.setReminders(JSON.stringify(list)); } catch(e){}
+}
+/* ---------- location reminders (geofences) ---------- */
+const canGeo = () => !!(bridge && typeof bridge.setGeofences === "function");
+function geoStatus(){ try { return canGeo() ? bridge.locationStatus() : "unsupported"; } catch(e){ return "unsupported"; } }
+function syncGeofences(){
+  if (!canGeo()) return;
+  const places = Object.fromEntries(byKind("place"));
+  const list = byKind("georem").map(([id,r]) => { const pl = places[r.placeId]; return pl ? {id, title:r.title, place:pl.name, lat:pl.lat, lng:pl.lng, radius:pl.radius||200, when:r.when, enabled:r.enabled!==false} : null; }).filter(Boolean);
+  try { bridge.setGeofences(JSON.stringify(list)); } catch(e){}
+}
+window.__geoStatus = (ok, msg) => { state.geoErr = ok ? "" : msg; if (state.tab==="more") render(); };
+window.__locChanged = () => { if (state.tab==="more" && state.more==="reminders") render(); };
+const pendingLoc = {};
+window.__locationDone = (id, lat, lng, acc, err) => { const f = pendingLoc[id]; if (f){ delete pendingLoc[id]; f(lat, lng, acc, err); } };
+function currentLocation(){
+  return new Promise((res, rej) => {
+    if (!canGeo()) return rej(new Error("unsupported"));
+    const id = newId(); pendingLoc[id] = (lat, lng, acc, err) => err ? rej(new Error(err)) : res({lat, lng, acc});
+    setTimeout(() => { if (pendingLoc[id]){ delete pendingLoc[id]; rej(new Error("timeout")); } }, 30000);
+    try { bridge.getLocation(id); } catch(e){ delete pendingLoc[id]; rej(e); }
+  });
+}
+/* "12.97, 80.22", or a Google Maps link with @lat,lng / q=lat,lng / ll=lat,lng / !3dlat!4dlng */
+function parseCoords(text){
+  const t = String(text||"");
+  const pats = [/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, /@(-?\d+\.\d+),(-?\d+\.\d+)/, /[?&](?:q|ll|query|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i, /(-?\d{1,2}\.\d+)\s*[,\s]\s*(-?\d{1,3}\.\d+)/];
+  for (const re of pats){ const m = re.exec(t); if (m){ const lat = parseFloat(m[1]), lng = parseFloat(m[2]); if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return {lat, lng}; } }
+  return null;
+}
+const PLACE_PRESETS = ["Home","Office","Shop","Native place","Gym"];
+function renderGeo(){
+  if (!canGeo()) return `<div class="card"><h3>Location reminders</h3><span class="small muted">Update the app to use reminders that fire when you arrive at or leave a place.</span></div>`;
+  const st = geoStatus(), places = byKind("place"), rems = byKind("georem"), placeMap = Object.fromEntries(places);
+  const perm = st==="background" ? `<span class="chip good">Location: allowed all the time</span>`
+    : st==="foreground" ? `<div class="notice"><div class="main"><span class="small"><b>One more step:</b> set location to <b>Allow all the time</b>, or reminders only work while LifeOS is open.</span><span class="tiny muted">Settings opens. Choose Location → Allow all the time, then come back.</span></div><button class="btn" data-act="geo-bg">Open</button></div>`
+    : `<div class="notice"><span class="small">LifeOS needs your location to know when you arrive or leave. It stays on this phone.</span><button class="btn" data-act="geo-allow">Allow location</button></div>`;
+  return `<div class="card">
+    <div class="between"><h3>Location reminders</h3>${st==="background" ? perm : ""}</div>
+    <span class="small muted">Get reminded when you arrive at or leave a place, like home, office, a shop or your native place.</span>
+    ${st!=="background" ? perm : ""}
+    ${state.geoErr && state.geoErr!=="none" ? `<span class="tiny neg">Couldn't turn on location reminders (${esc(state.geoErr)}). Check that location is on.</span>` : ""}
+  </div>
+
+  <form class="card" id="pl-form" autocomplete="off">
+    <h3>Places</h3>
+    <div class="presets">${PLACE_PRESETS.map(n => `<button type="button" data-act="pl-name" data-k="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+    <input class="field" id="pl-name" maxlength="40" placeholder="Place name, e.g. Home" aria-label="Place name">
+    <button type="button" class="btn ghost block" data-act="pl-here" ${state.locBusy ? "disabled" : ""}>${state.locBusy ? "Finding you…" : "📍 Use my current location"}</button>
+    <input class="field" id="pl-coords" placeholder="Or paste a Google Maps link / 12.97, 80.22" aria-label="Coordinates or map link">
+    <span class="tiny muted" id="pl-found">${state.plFound ? `Location: ${state.plFound.lat.toFixed(5)}, ${state.plFound.lng.toFixed(5)}${state.plFound.acc ? ` (±${Math.round(state.plFound.acc)} m)` : ""}` : "Stand at the place and tap Use my current location, or paste its map link."}</span>
+    <label class="flabel" for="pl-radius">Reminder area<select class="field" id="pl-radius" data-live="1">${[[150,"150 m · small shop"],[200,"200 m · home / office"],[500,"500 m · campus"],[2000,"2 km · your town"],[5000,"5 km · your native place"]].map(([v,l]) => `<option value="${v}" ${v===200?"selected":""}>${l}</option>`).join("")}</select></label>
+    <button class="btn block" type="submit">Save place</button>
+  </form>
+  ${places.length ? `<ul class="list">${places.map(([id,pl]) => `<li><span class="cat">${esc((pl.name||"?").slice(0,2).toUpperCase())}</span>
+      <div class="main"><span class="title">${esc(pl.name)}</span><span class="meta">${Number(pl.lat).toFixed(4)}, ${Number(pl.lng).toFixed(4)} · ${pl.radius >= 1000 ? (pl.radius/1000)+" km" : pl.radius+" m"} · ${rems.filter(([,r]) => r.placeId===id).length} reminders</span></div>
+      <a class="del" href="https://www.google.com/maps/search/?api=1&query=${pl.lat},${pl.lng}">Map</a>${delBtn(id)}</li>`).join("")}</ul>` : ""}
+
+  ${places.length ? `<form class="card" id="gr-form" autocomplete="off">
+    <h3>New location reminder</h3>
+    <input class="field" id="gr-title" maxlength="100" placeholder="Remind me to… e.g. Take wallet, keys, lunch box" aria-label="Reminder text">
+    <div class="grid2">
+      <select class="field" id="gr-when" data-live="1" aria-label="When"><option value="exit">When I leave</option><option value="enter">When I arrive at</option></select>
+      <select class="field" id="gr-place" data-live="1" aria-label="Place">${places.map(([id,pl]) => `<option value="${id}">${esc(pl.name)}</option>`).join("")}</select>
+    </div>
+    <button class="btn block" type="submit">Add location reminder</button>
+  </form>` : ""}
+  ${rems.length ? `<ul class="list">${rems.map(([id,r]) => { const pl = placeMap[r.placeId], on = r.enabled!==false;
+      return `<li class="${on?"":"off"}"><span class="cat">${r.when==="exit" ? "↗" : "↘"}</span>
+        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta">${r.when==="exit" ? "Leaving" : "Arriving at"} ${esc(pl ? pl.name : "a deleted place")}</span></div>
+        <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>${delBtn(id)}</li>`; }).join("")}</ul>` : ""}`;
 }
 function notifAllowed(){ try { return !bridge || bridge.notificationsAllowed(); } catch(e){ return true; } }
 window.__notifChanged = () => render();
@@ -1630,7 +1702,8 @@ function renderReminders(){
         <div class="main"><span class="title">${esc(r.title)}</span><span class="meta"><span>${esc(rep)}</span>${on ? (nf ? `<span class="chip">Next: ${esc(whenLabel(nf))}</span>` : `<span class="chip warn">Finished</span>`) : `<span>Paused</span>`}</span></div>
         <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>
         ${delBtn(id)}</li>`;
-    }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}`;
+    }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}
+  ${renderGeo()}`;
 }
 /* ---------- backup to a file: Google Drive via the system picker ---------- */
 const BK_LAST = "lifeos-backup-at", BK_AUTO = "lifeos-backup-auto";
@@ -1769,6 +1842,17 @@ document.addEventListener("click", e => {
   }
   if (act==="live-clear"){ state.wPick = null; renderLiveResults(); liveFormText(); return; }
   if (act==="refresh-prices"){ refreshPrices(true); return; }
+  if (act==="geo-allow"){ try { bridge.requestLocation(false); } catch(_){} return; }
+  if (act==="geo-bg"){ try { bridge.requestLocation(true); } catch(_){ try { bridge.openAppSettings(); } catch(__){} } return; }
+  if (act==="pl-name"){ const n = document.getElementById("pl-name"); if (n) n.value = b.dataset.k; return; }
+  if (act==="pl-here"){
+    if (geoStatus()==="none"){ toast("Allow location first."); try { bridge.requestLocation(false); } catch(_){} return; }
+    state.locBusy = true; render();
+    currentLocation().then(p => { state.plFound = p; toast("Got your location"); })
+      .catch(e => toast(e.message==="no_permission" ? "Allow location first." : "Couldn't get your location. Turn on location and try again outdoors."))
+      .finally(() => { state.locBusy = false; render(); });
+    return;
+  }
   if (act==="chart-range"){ state.chartRange = {...(state.chartRange||{}), [id]: b.dataset.k}; loadChart(id, b.textContent==="Try again"); return; }
   if (act==="plan-contrib" && it){
     const m = moneyOf(it);
@@ -2053,6 +2137,29 @@ document.addEventListener("submit", e => {
     if (Object.values(patch).some(v => !isFinite(v) || v <= 0)){ toast("Each goal needs a number above zero."); return; }
     saveSettings(patch); toast("Goals saved");
   }
+  if (f.id==="pl-form"){
+    const name = val("pl-name").trim(); if (!name){ toast("Name the place, e.g. Home."); return; }
+    const pasted = val("pl-coords").trim(), parsed = pasted ? parseCoords(pasted) : null;
+    if (pasted && !parsed){ toast(/goo\.gl|g\.co/.test(pasted) ? "Short map links can't be read. In Google Maps, press and hold the place, then copy the numbers shown (like 12.97, 80.22) and paste them." : "Couldn't read coordinates. Paste numbers like 12.97, 80.22 or a full Google Maps link."); return; }
+    const loc = parsed || state.plFound;
+    if (!loc){ toast("Tap Use my current location, or paste the place's map link."); return; }
+    const radius = Number(val("pl-radius")) || 200;
+    clear("pl-name","pl-coords"); state.plFound = null;
+    setItem(newId(), {kind:"place", name, lat:loc.lat, lng:loc.lng, radius, created:Date.now()});
+    toast(`Saved ${name}`);
+    return;
+  }
+  if (f.id==="gr-form"){
+    const title = val("gr-title").trim(), placeId = val("gr-place"), when = val("gr-when")==="enter" ? "enter" : "exit";
+    if (!title){ toast("Type what to remind you about."); return; }
+    if (!state.items.get(placeId)){ toast("Pick a place."); return; }
+    clear("gr-title");
+    if (bridge && !notifAllowed()){ try { bridge.requestNotifications(); } catch(_){} }
+    setItem(newId(), {kind:"georem", title, placeId, when, enabled:true, created:Date.now()});
+    const st = geoStatus();
+    toast(st==="background" ? "Location reminder set" : "Saved. Allow location all the time so it works in the background.");
+    return;
+  }
   if (f.id==="rem-form"){
     const title = val("r-title").trim(), time = val("r-time"), repeat = val("r-repeat");
     if (!title){ toast("Type what to remind you about."); document.getElementById("r-title").focus(); return; }
@@ -2096,6 +2203,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden){ sta
 }
 if (state.items.size && byKind("asset").length + byKind("liability").length) { snapshotNetWorth(); persist(); }
 syncReminders();
+syncGeofences();
 render();
 checkUpdate(false);
 refreshPrices(false);

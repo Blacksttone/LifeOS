@@ -74,11 +74,44 @@ public class MainActivity extends Activity {
         web.loadUrl("https://" + HOST + "/assets/index.html");
 
         ReminderScheduler.scheduleAll(this);
+        try { Geo.registerAll(this, null); } catch (Exception ignored) {}
     }
 
     /** Runs a script in the page from any thread. */
     void runJs(final String js) {
         runOnUiThread(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+
+    void requestLocationPermission(boolean background) {
+        if (!background || !Geo.hasFine(this)) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, 2);
+        } else if (Build.VERSION.SDK_INT >= 29) {
+            // On Android 11+ this opens the app's location settings, where the user picks "Allow all the time".
+            requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, 3);
+        }
+    }
+
+    void openAppSettings() {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception ignored) {}
+    }
+
+    void currentLocation(final String id) {
+        if (!Geo.hasFine(this)) { runJs("window.__locationDone && window.__locationDone(" + org.json.JSONObject.quote(id) + ",null,null,null,'no_permission')"); return; }
+        try {
+            com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this)
+                    .getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                            new com.google.android.gms.tasks.CancellationTokenSource().getToken())
+                    .addOnSuccessListener(loc -> {
+                        if (loc == null) runJs("window.__locationDone(" + org.json.JSONObject.quote(id) + ",null,null,null,'no_fix')");
+                        else runJs("window.__locationDone(" + org.json.JSONObject.quote(id) + "," + loc.getLatitude() + "," + loc.getLongitude() + "," + loc.getAccuracy() + ",null)");
+                    })
+                    .addOnFailureListener(e -> runJs("window.__locationDone(" + org.json.JSONObject.quote(id) + ",null,null,null,'error')"));
+        } catch (SecurityException e) {
+            runJs("window.__locationDone(" + org.json.JSONObject.quote(id) + ",null,null,null,'no_permission')");
+        }
     }
 
     void requestNotificationPermission() {
@@ -104,6 +137,17 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (web != null) web.evaluateJavascript("window.__notifChanged && window.__notifChanged()", null);
+        if (requestCode == 2 || requestCode == 3) {
+            try { Geo.registerAll(this, null); } catch (Exception ignored) {}
+            if (web != null) web.evaluateJavascript("window.__locChanged && window.__locChanged()", null);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Back from Settings: the location permission may have changed.
+        if (web != null) web.evaluateJavascript("window.__locChanged && window.__locChanged()", null);
     }
 
     @Override
