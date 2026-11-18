@@ -923,6 +923,8 @@ function renderHome(){
     <button data-act="go" data-tab="more" data-more="journal">${icon('<path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/>')}Journal</button>
   </div>
 
+  ${homeTodos()}
+  ${homeReminders()}
   ${homeLifeMap()}
 
   <div class="grid2">
@@ -949,11 +951,6 @@ function renderHome(){
     </button>
   </div>
 
-  <button class="card tap" data-act="go" data-tab="more" data-more="reminders">
-    <div class="between"><span class="label">Next reminder</span>${nr ? `<span class="chip">${esc(whenLabel(nr.t))}</span>` : ""}</div>
-    <span class="mid">${nr ? esc(nr.r.title) : "No reminders set"}</span>
-    ${!nr ? `<span class="tiny muted">Tap to add reminders for water, workouts and bills.</span>` : ""}
-  </button>
 
   <button class="card tap" data-act="go" data-tab="more" data-more="journal">
     <div class="between"><span class="label">Journal</span>${wrote ? `<span class="chip good">Written today</span>` : `<span class="chip warn">Not written yet</span>`}</div>
@@ -1098,6 +1095,51 @@ function yearlyMoney(id, it){
         <span class="tiny muted">${m.upcoming ? (startNowNeeded({...it, start: it.period.from, by: it.period.to}) < m.needed ? `Start this month instead: ${inr(startNowNeeded({...it, start: it.period.from, by: it.period.to}))} a month.` : "Anything you add early lowers the monthly amount.") : `This month: ${inr(m.thisMonth)} of ${inr(m.needed)}`}</span></div></div>
       <div class="inline" style="flex-wrap:nowrap;margin-top:6px"><input class="field" style="flex:1" id="gc-${id}" inputmode="numeric" placeholder="${m.upcoming ? "Add early ₹" : m.needed > m.thisMonth ? inr(m.needed - m.thisMonth) : "Amount ₹"}" aria-label="Contribution amount"><button class="btn" data-act="contrib" data-id="${id}">Add</button></div>` : ""}
     <div class="between tiny muted" style="margin-top:6px"><span class="dots">${dots}</span><span>Contributions, last 6 months</span></div>`;
+}
+/* ---------- Home: to-dos and today's reminders ---------- */
+function firesOn(r, day){
+  if (r.enabled===false) return false;
+  const wd = day.getDay()>=1 && day.getDay()<=5;
+  if (r.repeat==="once") return r.date===dayKey(day);
+  if (r.repeat==="weekdays") return wd;
+  if (r.repeat==="weekends") return !wd;
+  if (r.repeat==="monthly"){ const last = new Date(day.getFullYear(), day.getMonth()+1, 0).getDate(); return day.getDate()===Math.min(Math.max(1, r.dom||1), last); }
+  return true;
+}
+function homeTodos(){
+  const open = byKind("todo").filter(([,t]) => !t.done);
+  const doneToday = byKind("todo").filter(([,t]) => t.done && t.doneAt && dayKey(new Date(t.doneAt))===dayKey(state.now));
+  const rows = open.slice(0, 6).map(([id,t]) => `<li><button class="check" data-act="todo" data-id="${id}" aria-pressed="false" aria-label="Mark ${esc(t.title)} done">${CHECK}</button>
+      <div class="main"><span class="title">${esc(t.title)}</span><span class="meta">${areaOf(itemArea(t)).label}</span></div></li>`).join("")
+    + doneToday.slice(0, 3).map(([id,t]) => `<li class="done"><button class="check" data-act="todo" data-id="${id}" aria-pressed="true" aria-label="Mark ${esc(t.title)} not done">${CHECK}</button>
+      <div class="main"><span class="title">${esc(t.title)}</span><span class="meta">Done today</span></div></li>`).join("");
+  return `<div class="card">
+    <div class="between"><span class="label">To-do</span><button class="del" data-act="go" data-tab="plan" data-plan="todo">${open.length ? `All ${open.length} →` : "Open →"}</button></div>
+    ${rows ? `<ul class="list" style="border:0;margin:0 -16px">${rows}</ul>` : `<span class="small muted">Nothing pending. Add something you need to do.</span>`}
+    ${open.length > 6 ? `<span class="tiny muted">+${open.length - 6} more in Plan → To-do</span>` : ""}
+    <form class="inline" id="home-todo" autocomplete="off" style="flex-wrap:nowrap"><input class="field" id="ht-title" maxlength="140" style="flex:1" placeholder="Add a to-do" aria-label="New to-do"><button class="btn" type="submit">Add</button></form>
+  </div>`;
+}
+function homeReminders(){
+  const now = state.now, today = [];
+  for (const [id,r] of byKind("reminder")){
+    if (!firesOn(r, now)) continue;
+    const [h,m] = (r.time||"08:00").split(":").map(Number), t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+    today.push({id, r, t, past: t <= now});
+  }
+  today.sort((a,b) => a.t - b.t);
+  const nr = nextReminder(), places = Object.fromEntries(byKind("place"));
+  const geo = byKind("georem").filter(([,g]) => g.enabled!==false && places[g.placeId]);
+  if (!today.length && !geo.length && !nr) return `<button class="card tap" data-act="go" data-tab="more" data-more="reminders">
+    <span class="label">Reminders</span><span class="small muted">No reminders yet. Add ones for water, workouts, bills, or for leaving home.</span></button>`;
+  const upcoming = today.filter(x => !x.past);
+  return `<div class="card">
+    <div class="between"><span class="label">Reminders today</span><button class="del" data-act="go" data-tab="more" data-more="reminders">Manage →</button></div>
+    ${today.length ? `<ul class="list" style="border:0;margin:0 -16px">${today.map(x => `<li class="${x.past ? "off" : ""}"><span class="rtime" style="font-size:16px;min-width:50px">${esc(x.r.time)}</span>
+        <div class="main"><span class="title">${esc(x.r.title)}</span></div>${x.past ? `<span class="tiny muted">Done</span>` : x===upcoming[0] ? `<span class="chip">Next</span>` : ""}</li>`).join("")}</ul>`
+      : `<span class="small muted">No more time reminders today.${nr ? ` Next: <b>${esc(nr.r.title)}</b> · ${esc(whenLabel(nr.t))}` : ""}</span>`}
+    ${geo.length ? `<span class="sub" style="margin-top:2px">By location</span>${geo.slice(0,4).map(([,g]) => `<div class="between small"><span>${g.when==="exit" ? "↗ Leaving" : "↘ At"} <b>${esc(places[g.placeId].name)}</b></span><span class="muted" style="text-align:right;flex:1;margin-left:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.title)}</span></div>`).join("")}` : ""}
+  </div>`;
 }
 function todoRow(id, t){
   const ts = new Date(t.done && t.doneAt ? t.doneAt : (t.created||Date.now()));
@@ -2136,6 +2178,13 @@ document.addEventListener("submit", e => {
     const patch = {waterGoal:g("g-water"), sleepGoal:g("g-sleep"), stepsGoal:g("g-steps"), workoutGoal:g("g-workout")};
     if (Object.values(patch).some(v => !isFinite(v) || v <= 0)){ toast("Each goal needs a number above zero."); return; }
     saveSettings(patch); toast("Goals saved");
+  }
+  if (f.id==="home-todo"){
+    const title = val("ht-title").trim(); if (!title) return;
+    clear("ht-title");
+    setItem(newId(), {kind:"todo", title, area:guessArea(title), done:false, created:Date.now()});
+    toast("To-do added");
+    return;
   }
   if (f.id==="pl-form"){
     const name = val("pl-name").trim(); if (!name){ toast("Name the place, e.g. Home."); return; }
