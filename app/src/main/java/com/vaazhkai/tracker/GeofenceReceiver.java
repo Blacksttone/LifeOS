@@ -50,6 +50,14 @@ public class GeofenceReceiver extends BroadcastReceiver {
                 if (o != null && g.getRequestId().equals(o.optString("id"))) { rule = o; break; }
             }
             if (rule == null || !rule.optBoolean("enabled", true)) continue;
+            // Only on the chosen days (0 = Sunday … 6 = Saturday, like JavaScript's getDay()).
+            JSONArray days = rule.optJSONArray("days");
+            if (days != null && days.length() > 0) {
+                int today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) - 1;
+                boolean on = false;
+                for (int d = 0; d < days.length(); d++) if (days.optInt(d, -1) == today) { on = true; break; }
+                if (!on) continue;
+            }
             String place = rule.optString("place", "your place");
             Notification n = new Notification.Builder(context, ReminderReceiver.CHANNEL)
                     .setSmallIcon(R.drawable.ic_notify)
