@@ -186,7 +186,9 @@ ul.list li.editor{flex-direction:column;align-items:stretch;gap:10px;background:
 .days{display:flex;gap:5px;flex-wrap:wrap}
 .days button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:12px;color:var(--muted);padding:0}
 .days button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
-.days.small button{width:28px;height:28px;font-size:11px}
+.days.small button{width:30px;height:30px;font-size:11px}
+ul.list li.wrap{flex-wrap:wrap}
+.daysrow{flex-basis:100%;padding-left:70px;margin-top:-2px}
 .checkline{display:flex;align-items:center;gap:10px;font-size:14px}
 .checkline input{width:20px;height:20px;accent-color:var(--blue)}
 .update{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:var(--blue);color:#fff;text-decoration:none}
@@ -266,6 +268,15 @@ const ASSET_TYPES = ["Bank / Cash",P2P,"Stocks","Mutual funds","Gold","FD / RD",
 const LIAB_TYPES = ["Home loan","Personal loan","Vehicle loan","Credit card","Education loan","Borrowed","Other"];
 const MOODS = [["1","Rough"],["2","Low"],["3","Okay"],["4","Good"],["5","Great"]];
 const REPEATS = {daily:"Every day", weekdays:"Mon – Fri", weekends:"Sat & Sun", monthly:"Every month", once:"Once"};
+const REPEAT_CHOICES = [["days","Repeat on days"],["monthly","Every month"],["once","Once"]];
+/* Weekdays a repeating reminder fires on (0 = Sunday … 6 = Saturday), or null for monthly / once. */
+function remDays(r){
+  if (r.repeat==="once" || r.repeat==="monthly") return null;
+  if (r.repeat==="days" && Array.isArray(r.days) && r.days.length) return r.days.slice().sort();
+  if (r.repeat==="weekdays") return [1,2,3,4,5];
+  if (r.repeat==="weekends") return [0,6];
+  return [0,1,2,3,4,5,6];
+}
 const PRESETS = [
   {title:"Drink water", time:"11:00", repeat:"daily"},
   {title:"Workout", time:"06:30", repeat:"daily"},
@@ -377,7 +388,8 @@ function saveSettings(patch, quiet){ state.items.set("settings", {...settings(),
 
 function syncReminders(){
   if (!bridge) return;
-  const list = byKind("reminder").map(([,r]) => ({title:r.title, time:r.time, repeat:r.repeat, date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false}));
+  const list = byKind("reminder").map(([,r]) => { const d = remDays(r);
+    return {title:r.title, time:r.time, repeat: d ? "days" : r.repeat, days: d || [], date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false}; });
   try { bridge.setReminders(JSON.stringify(list)); } catch(e){}
 }
 /* ---------- location reminders (geofences) ---------- */
@@ -463,9 +475,9 @@ function renderGeo(){
     <button class="btn block" type="submit">Add location reminder</button>
   </form>` : ""}
   ${rems.length ? `<ul class="list">${rems.map(([id,r]) => { const pl = placeMap[r.placeId], on = r.enabled!==false;
-      return `<li class="${on?"":"off"}"><span class="cat">${r.when==="exit" ? "↗" : "↘"}</span>
-        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta">${r.when==="exit" ? "Leaving" : "Arriving at"} ${esc(pl ? pl.name : "a deleted place")} · ${esc(daysLabel(geoDays(r)))}</span>${dayChips(geoDays(r), "georem-day", id, true)}</div>
-        <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>${delBtn(id)}</li>`; }).join("")}</ul>` : ""}`;
+      return `<li class="wrap ${on?"":"off"}"><span class="cat">${r.when==="exit" ? "↗" : "↘"}</span>
+        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta">${r.when==="exit" ? "Leaving" : "Arriving at"} ${esc(pl ? pl.name : "a deleted place")} · ${esc(daysLabel(geoDays(r)))}</span></div>
+        <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>${delBtn(id)}<div class="daysrow" style="padding-left:48px">${dayChips(geoDays(r), "georem-day", id, true)}</div></li>`; }).join("")}</ul>` : ""}`;
 }
 function notifAllowed(){ try { return !bridge || bridge.notificationsAllowed(); } catch(e){ return true; } }
 window.__notifChanged = () => render();
@@ -514,9 +526,7 @@ function nextFire(r, now){
   for (let i=0;i<8;i++){
     const t = new Date(now.getFullYear(), now.getMonth(), now.getDate()+i, h, m, 0, 0);
     if (t <= now) continue;
-    const wd = t.getDay()>=1 && t.getDay()<=5;
-    if (r.repeat==="weekdays" && !wd) continue;
-    if (r.repeat==="weekends" && wd) continue;
+    if (!remDays(r).includes(t.getDay())) continue;
     return t;
   }
   return null;
@@ -909,7 +919,8 @@ function syncFormVisibility(){
   if (wt && wp){ wp.hidden = wt.value!==P2P; if (!wp.hidden) p2pPreview(); }
   if (wt && wl){ const src = LIVE_TYPES[wt.value]; wl.hidden = !src; if (state.wPick && state.wPick.src!==src) state.wPick = null; if (src){ renderLiveResults(); liveFormText(); } }
   const rep = document.getElementById("r-repeat");
-  if (rep){ document.getElementById("r-date-wrap").hidden = rep.value!=="once"; document.getElementById("r-dom-wrap").hidden = rep.value!=="monthly"; }
+  if (rep){ document.getElementById("r-date-wrap").hidden = rep.value!=="once"; document.getElementById("r-dom-wrap").hidden = rep.value!=="monthly";
+    const dw = document.getElementById("r-days-wrap"); if (dw) dw.hidden = rep.value!=="days"; }
 }
 
 /* HOME */
@@ -1120,12 +1131,9 @@ function yearlyMoney(id, it){
 /* ---------- Home: to-dos and today's reminders ---------- */
 function firesOn(r, day){
   if (r.enabled===false) return false;
-  const wd = day.getDay()>=1 && day.getDay()<=5;
   if (r.repeat==="once") return r.date===dayKey(day);
-  if (r.repeat==="weekdays") return wd;
-  if (r.repeat==="weekends") return !wd;
   if (r.repeat==="monthly"){ const last = new Date(day.getFullYear(), day.getMonth()+1, 0).getDate(); return day.getDate()===Math.min(Math.max(1, r.dom||1), last); }
-  return true;
+  return remDays(r).includes(day.getDay());
 }
 function homeTodos(){
   const open = byKind("todo").filter(([,t]) => !t.done);
@@ -1750,7 +1758,12 @@ function renderReminders(){
       <input class="field" id="r-title" maxlength="100" placeholder="Remind me to…" aria-label="Reminder text">
       <div class="grid2">
         <input class="field" id="r-time" type="time" value="07:00" aria-label="Time">
-        <select class="field" id="r-repeat" aria-label="Repeat">${Object.entries(REPEATS).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
+        <select class="field" id="r-repeat" aria-label="Repeat">${REPEAT_CHOICES.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
+      </div>
+      <div id="r-days-wrap" class="stack">
+        <span class="flabel">On these days <span>${esc(daysLabel(state.rDays || ALL_DAYS))}</span></span>
+        ${dayChips(state.rDays || ALL_DAYS, "r-day")}
+        <div class="presets"><button type="button" data-act="r-days" data-k="0123456">Every day</button><button type="button" data-act="r-days" data-k="12345">Mon – Fri</button><button type="button" data-act="r-days" data-k="123456">Mon – Sat</button><button type="button" data-act="r-days" data-k="06">Weekends</button></div>
       </div>
       <div id="r-date-wrap" hidden><input class="field" id="r-date" type="date" value="${dayKey(state.now)}" min="${dayKey(state.now)}" aria-label="Date"></div>
       <div id="r-dom-wrap" hidden><label class="flabel" for="r-dom">Day of the month <span>1 to 31. In shorter months it fires on the last day.</span><input class="field" id="r-dom" inputmode="numeric" value="5"></label></div>
@@ -1760,11 +1773,11 @@ function renderReminders(){
     ${list.length ? `<ul class="list">${list.map(([id,r]) => {
       const nf = nextFire(r, state.now), on = r.enabled!==false;
       const rep = r.repeat==="once" ? (()=>{ const dd = parseDay(r.date); return `Once · ${dd.getDate()} ${MON[dd.getMonth()]}`; })()
-        : r.repeat==="monthly" ? `Every month on day ${r.dom}` : REPEATS[r.repeat]||"Every day";
-      return `<li class="${on?"":"off"}"><span class="rtime">${esc(r.time)}</span>
+        : r.repeat==="monthly" ? `Every month on day ${r.dom}` : daysLabel(remDays(r));
+      return `<li class="wrap ${on?"":"off"}"><span class="rtime">${esc(r.time)}</span>
         <div class="main"><span class="title">${esc(r.title)}</span><span class="meta"><span>${esc(rep)}</span>${on ? (nf ? `<span class="chip">Next: ${esc(whenLabel(nf))}</span>` : `<span class="chip warn">Finished</span>`) : `<span>Paused</span>`}</span></div>
         <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>
-        ${delBtn(id)}</li>`;
+        ${delBtn(id)}${remDays(r) ? `<div class="daysrow">${dayChips(remDays(r), "rem-day", id, true)}</div>` : ""}</li>`;
     }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}
   ${renderGeo()}`;
 }
@@ -1907,6 +1920,19 @@ document.addEventListener("click", e => {
   if (act==="refresh-prices"){ refreshPrices(true); return; }
   if (act==="geo-allow"){ try { bridge.requestLocation(false); } catch(_){} return; }
   if (act==="geo-bg"){ try { bridge.requestLocation(true); } catch(_){ try { bridge.openAppSettings(); } catch(__){} } return; }
+  if (act==="r-day"){
+    const d = Number(b.dataset.d), cur = new Set(state.rDays || ALL_DAYS);
+    if (cur.has(d)){ if (cur.size === 1){ toast("Keep at least one day."); return; } cur.delete(d); } else cur.add(d);
+    state.rDays = [...cur].sort(); render(); return;
+  }
+  if (act==="r-days"){ state.rDays = b.dataset.k.split("").map(Number); render(); return; }
+  if (act==="rem-day" && it){
+    const d = Number(b.dataset.d), cur = new Set(remDays(it) || ALL_DAYS);
+    if (cur.has(d)){ if (cur.size === 1){ toast("Keep at least one day."); return; } cur.delete(d); } else cur.add(d);
+    const days = [...cur].sort();
+    updateItem(id, days.length===7 ? {repeat:"daily", days:[]} : {repeat:"days", days});
+    toast(daysLabel(days)); return;
+  }
   if (act==="gr-day"){
     const d = Number(b.dataset.d), cur = new Set(state.grDays || ALL_DAYS);
     if (cur.has(d)){ if (cur.size === 1){ toast("Keep at least one day."); return; } cur.delete(d); } else cur.add(d);
@@ -2247,7 +2273,8 @@ document.addEventListener("submit", e => {
     if (!/^\d\d:\d\d$/.test(time)){ toast("Pick a time."); return; }
     const dom = parseInt(val("r-dom"), 10);
     if (repeat==="monthly" && !(dom >= 1 && dom <= 31)){ toast("Day of the month must be 1 to 31."); return; }
-    const r = {kind:"reminder", title, time, repeat, date: repeat==="once" ? val("r-date") : "", dom: repeat==="monthly" ? dom : 1, enabled:true, created:Date.now()};
+    const days = (state.rDays || ALL_DAYS).slice().sort(), rp = repeat==="days" ? (days.length===7 ? "daily" : "days") : repeat;
+    const r = {kind:"reminder", title, time, repeat: rp, days: rp==="days" ? days : [], date: repeat==="once" ? val("r-date") : "", dom: repeat==="monthly" ? dom : 1, enabled:true, created:Date.now()};
     if (repeat==="once" && !nextFire(r, new Date())){ toast("That date and time has already passed."); return; }
     clear("r-title"); addReminder(r);
   }

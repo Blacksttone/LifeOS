@@ -127,6 +127,15 @@ final class ReminderScheduler {
             int dow = cal.get(Calendar.DAY_OF_WEEK);
             boolean weekday = dow >= Calendar.MONDAY && dow <= Calendar.FRIDAY;
             if ("weekdays".equals(repeat) && !weekday) continue;
+            if ("days".equals(repeat)) {
+                // Selected days, 0 = Sunday … 6 = Saturday (same as JavaScript's getDay()).
+                org.json.JSONArray days = o.optJSONArray("days");
+                if (days != null && days.length() > 0) {
+                    boolean on = false;
+                    for (int d = 0; d < days.length(); d++) if (days.optInt(d, -1) == dow - 1) { on = true; break; }
+                    if (!on) continue;
+                }
+            }
             if ("weekends".equals(repeat) && weekday) continue;
             return t;
         }
