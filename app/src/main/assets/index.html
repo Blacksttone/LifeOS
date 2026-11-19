@@ -1029,12 +1029,45 @@ function readPeriod(p){
   if (t < f) return {err:"\"Complete by\" can't be before \"From\"."};
   return {p:{from:f, to:t}};
 }
+/* ---------- "Remind at" for Plan items: a reminder linked to the item ---------- */
+const planReminder = id => byKind("reminder").find(([,r]) => r.link===id) || null;
+const remindable = k => ["daily","weekly","monthly","todo"].includes(k);
+function remindFields(p, it, live){
+  const l = live ? `data-live="1"` : "", linked = it && planReminder(it._id || "");
+  const r = linked ? linked[1] : null, k = it ? it.kind : state.plan;
+  const time = r ? r.time : "";
+  let extra = "";
+  if (k==="weekly"){ const d = r && Array.isArray(r.days) && r.days.length ? r.days[0] : state.now.getDay();
+    extra = `<select class="field" id="${p}-rday" ${l} aria-label="Day">${[1,2,3,4,5,6,0].map(i => `<option value="${i}" ${i===d?"selected":""}>${DAYS[i]}</option>`).join("")}</select>`; }
+  if (k==="monthly"){ const d = r ? (r.dom||1) : state.now.getDate();
+    extra = `<select class="field" id="${p}-rdom" ${l} aria-label="Day of month">${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===d?"selected":""}>Day ${i+1}</option>`).join("")}</select>`; }
+  if (k==="todo"){ const d = r && r.date ? r.date : dayKey(state.now);
+    extra = `<input class="field" type="date" id="${p}-rdate" ${l} value="${d}" min="${dayKey(state.now)}" aria-label="Date">`; }
+  return `<div class="flabel">⏰ Remind me <span>${k==="daily" ? "Every day at this time. Leave empty for no reminder." : k==="weekly" ? "Once a week, on this day." : k==="monthly" ? "Once a month, on this date." : "Once, on this date."}</span></div>
+    <div class="grid2"><input class="field" type="time" id="${p}-rtime" ${l} value="${time}" aria-label="Reminder time">${extra || `<span></span>`}</div>`;
+}
+/* Create, update or remove the item's reminder. time "" removes it. */
+function setPlanReminder(id, it, p){
+  if (!remindable(it.kind)) return null;
+  const time = valOf(p+"-rtime"), linked = planReminder(id);
+  if (!time){ if (linked) state.items.delete(linked[0]); return null; }
+  let rr;
+  if (it.kind==="daily"){ const keep = linked && remDays(linked[1]); rr = keep && keep.length < 7 ? {repeat:"days", days:keep} : {repeat:"daily", days:[]}; }
+  else if (it.kind==="weekly") rr = {repeat:"days", days:[Number(valOf(p+"-rday"))]};
+  else if (it.kind==="monthly") rr = {repeat:"monthly", dom:Number(valOf(p+"-rdom")) || 1, days:[]};
+  else rr = {repeat:"once", date: valOf(p+"-rdate") || dayKey(state.now), days:[]};
+  const r = {kind:"reminder", title: it.title, time, date:"", dom:1, ...rr, enabled:true, link:id, created: linked ? linked[1].created : Date.now()};
+  state.items.set(linked ? linked[0] : newId(), r);
+  return r;
+}
+const remindChip = id => { const l = planReminder(id); return l && l[1].enabled!==false ? `<span class="chip">⏰ ${esc(l[1].time)}</span>` : ""; };
 function editorRow(id, it){
   return `<li class="editor">
     <label class="flabel" for="ed-title">Task<input class="field" id="ed-title" data-live="1" maxlength="140" value="${esc(it.title)}"></label>
     <label class="flabel" for="ed-area">Life area<select class="field" id="ed-area" data-live="1">${areaOptions(itemArea(it))}</select></label>
     ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}
       ${moneyFields("ed", it, true)}` : ""}
+    ${remindable(it.kind) ? remindFields("ed", {...it, _id:id}, true) : ""}
     <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button>
       <span class="inline"><button class="btn ghost" data-act="ed-cancel">Cancel</button><button class="btn" data-act="ed-save" data-id="${id}">Save</button></span></div>
   </li>`;
@@ -1070,7 +1103,8 @@ function renderPlan(){
     : `<form class="inline" id="add-form" autocomplete="off">
         <input class="field" id="new-title" maxlength="140" placeholder="${esc(kd.placeholder)}" aria-label="${esc(kd.placeholder)}">
         <select class="field" style="flex:0 1 130px" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
-        <button class="btn" type="submit">Add</button></form>`;
+        <button class="btn" type="submit">Add</button>
+        <details class="winbox" id="nw-remind"><summary>⏰ Add a reminder time</summary><div class="stack">${remindFields("nr", {kind:kd.k}, false)}</div></details></form>`;
 
   const anyTasks = [...state.items.values()].some(v => v && PLAN.some(p=>p.k===v.kind));
   const withEd = (id, it, row) => row + (state.editing===id ? editorRow(id,it) : "");
@@ -1101,7 +1135,7 @@ function recurringRow(id, it, kd){
   return `<li class="${done?"done":""}">
     <button class="check" data-act="toggle" data-id="${id}" aria-pressed="${done}" aria-label="Mark ${esc(it.title)} ${done?"not done":"done"}">${CHECK}</button>
     <div class="main"><span class="title">${esc(it.title)}</span>
-      <span class="meta"><span class="dots">${dots}</span><span>${hits}/${n} last ${n} ${unit}</span>${s ? `<span class="chip">${s}-day streak</span>` : ""}<span>${areaOf(itemArea(it)).label}</span></span></div>
+      <span class="meta"><span class="dots">${dots}</span><span>${hits}/${n} last ${n} ${unit}</span>${s ? `<span class="chip">${s}-day streak</span>` : ""}${remindChip(id)}<span>${areaOf(itemArea(it)).label}</span></span></div>
     ${editBtn(id)}</li>`;
 }
 function yearlyRow(id, it){
@@ -1175,7 +1209,7 @@ function todoRow(id, t){
   return `<li class="${t.done?"done":""}">
     <button class="check" data-act="todo" data-id="${id}" aria-pressed="${!!t.done}" aria-label="Mark ${esc(t.title)} ${t.done?"not done":"done"}">${CHECK}</button>
     <div class="main"><span class="title">${esc(t.title)}</span>
-      <span class="meta">${t.done ? "Done" : "Added"} ${ts.getDate()} ${MON[ts.getMonth()]} · ${areaOf(itemArea(t)).label}</span></div>
+      <span class="meta">${t.done ? "Done" : "Added"} ${ts.getDate()} ${MON[ts.getMonth()]} · ${areaOf(itemArea(t)).label}${t.done ? "" : remindChip(id)}</span></div>
     ${editBtn(id)}</li>`;
 }
 const goalEditBtn = id => `<button class="del" data-act="edit" data-id="${id}" aria-expanded="${state.editing===id}">${state.editing===id ? "Close" : "Edit"}</button>`;
@@ -1985,8 +2019,11 @@ document.addEventListener("click", e => {
       if (a > 0){ next.amount = a; next.saved = sv; next.contrib = next.contrib || {}; } else { delete next.amount; delete next.saved; delete next.contrib; }
     }
     state.items.set(id, next);
-    toast(next.period ? `Saved · ${periodLabel(next.period)}${hasMoney(next) && moneyOf(next).status!=="done" ? ` · ${inr(moneyOf(next).needed)} a month` : ""}` : "Saved");
-    state.editing = null; afterChange(it.kind); return;
+    const rr = setPlanReminder(id, next, "ed");
+    if (rr && rr.repeat==="once" && !nextFire(rr, new Date())){ toast("That reminder time has already passed. Pick a later time."); }
+    else toast(next.period ? `Saved · ${periodLabel(next.period)}${hasMoney(next) && moneyOf(next).status!=="done" ? ` · ${inr(moneyOf(next).needed)} a month` : ""}` : rr ? `Saved · reminder ${whenLabel(nextFire(rr, new Date()))}` : "Saved");
+    if (rr && bridge && !notifAllowed()){ try { bridge.requestNotifications(); } catch(_){} }
+    state.editing = null; afterChange("reminder"); return;
   }
   if (act==="ge-cancel"){ state.editing = null; render(); return; }
   if (act==="ge-save" && it){
@@ -2166,7 +2203,14 @@ document.addEventListener("submit", e => {
     }
     if (planOf(kind).period) data.log = {};
     if (kind==="todo") data.done = false;
-    clear("new-title"); setItem(newId(), data);
+    const nid = newId();
+    state.items.set(nid, data);
+    const rr = setPlanReminder(nid, data, "nr");
+    clear("new-title", "nr-rtime");
+    const box = document.getElementById("nw-remind"); if (box) box.open = false;
+    afterChange("reminder");
+    if (rr){ if (bridge && !notifAllowed()){ try { bridge.requestNotifications(); } catch(_){} }
+      const nf = nextFire(rr, new Date()); toast(nf ? `Added · reminder ${whenLabel(nf)}` : "Added. The reminder time has already passed."); }
   }
   if (f.id==="g-form"){
     const title = val("g-title").trim(), area = val("g-area") || "personal";
