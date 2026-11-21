@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
@@ -30,6 +32,16 @@
         </activity>
 
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".AlarmActionReceiver" android:exported="false" />
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="com.vaazhkai.tracker.alarm"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
         <receiver android:name=".GeofenceReceiver" android:exported="false" />
 
         <receiver android:name=".BootReceiver" android:exported="true">

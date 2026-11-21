@@ -64,7 +64,12 @@ final class ReminderScheduler {
             PendingIntent pi = intentFor(c, i, o.optString("title", "Reminder"), o.optString("time", ""),
                     PendingIntent.FLAG_UPDATE_CURRENT);
             try {
-                if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
+                if (o.optBoolean("alarm", false) && (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms())) {
+                    // Alarm-style: exact, shows the alarm icon in the status bar.
+                    Intent show = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    PendingIntent showPi = PendingIntent.getActivity(c, 7000 + i, show, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    am.setAlarmClock(new AlarmManager.AlarmClockInfo(t, showPi), pi);
+                } else if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t, pi);
                 } else {
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t, pi);

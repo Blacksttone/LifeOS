@@ -378,7 +378,7 @@ function removeItem(id){
 function afterChange(kind){
   if (kind==="asset" || kind==="liability" || kind==="*") snapshotNetWorth();
   persist();
-  if (kind==="reminder" || kind==="*") syncReminders();
+  if (kind==="reminder" || kind==="*" || ["daily","weekly","monthly","todo"].includes(kind)) syncReminders();
   if (kind==="place" || kind==="georem" || kind==="*") syncGeofences();
   render();
 }
@@ -386,10 +386,33 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const settings = () => ({...DEFAULTS, ...(state.items.get("settings")||{})});
 function saveSettings(patch, quiet){ state.items.set("settings", {...settings(), ...patch}); persist(); if (!quiet) render(); }
 
+function remDoneToday(id, r){
+  if (r.link){
+    const it = state.items.get(r.link);
+    if (it && it.kind==="todo") return !!it.done;
+    if (it && planOf(it.kind) && planOf(it.kind).period) return isDone(it, planOf(it.kind), state.now);
+  }
+  return !!(r.doneLog || {})[dayKey(state.now)];
+}
+function toggleRemDone(id){
+  const r = state.items.get(id); if (!r) return;
+  const it = r.link ? state.items.get(r.link) : null;
+  if (it && it.kind==="todo"){ updateItem(r.link, {done:!it.done, doneAt: it.done ? null : Date.now()}); return; }
+  if (it && planOf(it.kind) && planOf(it.kind).period){
+    const kd = planOf(it.kind), key = periodKey(kd.period, state.now), log = {...(it.log||{})};
+    if (log[key]) delete log[key]; else log[key] = Date.now();
+    updateItem(r.link, {log}); return;
+  }
+  const dl = {...(r.doneLog || {})}, k = dayKey(state.now);
+  if (dl[k]) delete dl[k]; else dl[k] = Date.now();
+  for (const key of Object.keys(dl)) if (key < dayKey(shift("day", state.now, 60))) delete dl[key];
+  updateItem(id, {doneLog: dl});
+}
 function syncReminders(){
   if (!bridge) return;
-  const list = byKind("reminder").map(([,r]) => { const d = remDays(r);
-    return {title:r.title, time:r.time, repeat: d ? "days" : r.repeat, days: d || [], date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false}; });
+  const list = byKind("reminder").map(([id,r]) => { const d = remDays(r);
+    return {title:r.title, time:r.time, repeat: d ? "days" : r.repeat, days: d || [], date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false,
+      alarm: !!r.alarm, skip: remDoneToday(id, r) ? dayKey(state.now) : ""}; });
   try { bridge.setReminders(JSON.stringify(list)); } catch(e){}
 }
 /* ---------- location reminders (geofences) ---------- */
@@ -1044,7 +1067,8 @@ function remindFields(p, it, live){
   if (k==="todo"){ const d = r && r.date ? r.date : dayKey(state.now);
     extra = `<input class="field" type="date" id="${p}-rdate" ${l} value="${d}" min="${dayKey(state.now)}" aria-label="Date">`; }
   return `<div class="flabel">⏰ Remind me <span>${k==="daily" ? "Every day at this time. Leave empty for no reminder." : k==="weekly" ? "Once a week, on this day." : k==="monthly" ? "Once a month, on this date." : "Once, on this date."}</span></div>
-    <div class="grid2"><input class="field" type="time" id="${p}-rtime" ${l} value="${time}" aria-label="Reminder time">${extra || `<span></span>`}</div>`;
+    <div class="grid2"><input class="field" type="time" id="${p}-rtime" ${l} value="${time}" aria-label="Reminder time">${extra || `<span></span>`}</div>
+    <label class="checkline" for="${p}-ralarm"><input type="checkbox" id="${p}-ralarm" ${l} ${r && r.alarm ? "checked" : ""}> ⏰ Ring as alarm</label>`;
 }
 /* Create, update or remove the item's reminder. time "" removes it. */
 function setPlanReminder(id, it, p){
@@ -1056,7 +1080,7 @@ function setPlanReminder(id, it, p){
   else if (it.kind==="weekly") rr = {repeat:"days", days:[Number(valOf(p+"-rday"))]};
   else if (it.kind==="monthly") rr = {repeat:"monthly", dom:Number(valOf(p+"-rdom")) || 1, days:[]};
   else rr = {repeat:"once", date: valOf(p+"-rdate") || dayKey(state.now), days:[]};
-  const r = {kind:"reminder", title: it.title, time, date:"", dom:1, ...rr, enabled:true, link:id, created: linked ? linked[1].created : Date.now()};
+  const r = {kind:"reminder", title: it.title, time, date:"", dom:1, ...rr, alarm: !!(document.getElementById(p+"-ralarm")||{}).checked, doneLog: linked ? linked[1].doneLog : undefined, enabled:true, link:id, created: linked ? linked[1].created : Date.now()};
   state.items.set(linked ? linked[0] : newId(), r);
   return r;
 }
@@ -1195,11 +1219,13 @@ function homeReminders(){
   const geo = byKind("georem").filter(([,g]) => g.enabled!==false && places[g.placeId]);
   if (!today.length && !geo.length && !nr) return `<button class="card tap" data-act="go" data-tab="more" data-more="reminders">
     <span class="label">Reminders</span><span class="small muted">No reminders yet. Add ones for water, workouts, bills, or for leaving home.</span></button>`;
-  const upcoming = today.filter(x => !x.past);
+  const upcoming = today.filter(x => !x.past && !remDoneToday(x.id, x.r));
   return `<div class="card">
     <div class="between"><span class="label">Reminders today</span><button class="del" data-act="go" data-tab="more" data-more="reminders">Manage →</button></div>
-    ${today.length ? `<ul class="list" style="border:0;margin:0 -16px">${today.map(x => `<li class="${x.past ? "off" : ""}"><span class="rtime" style="font-size:16px;min-width:50px">${esc(x.r.time)}</span>
-        <div class="main"><span class="title">${esc(x.r.title)}</span></div>${x.past ? `<span class="tiny muted">Done</span>` : x===upcoming[0] ? `<span class="chip">Next</span>` : ""}</li>`).join("")}</ul>`
+    ${today.length ? `<ul class="list" style="border:0;margin:0 -16px">${today.map(x => { const done = remDoneToday(x.id, x.r);
+        return `<li class="${done ? "done" : ""}"><button class="check" data-act="rem-done" data-id="${x.id}" aria-pressed="${done}" aria-label="Mark ${esc(x.r.title)} done">${CHECK}</button>
+        <span class="rtime" style="font-size:16px;min-width:50px">${esc(x.r.time)}</span>
+        <div class="main"><span class="title">${esc(x.r.title)}</span></div>${x.r.alarm ? `<span class="tiny" title="Rings as alarm">⏰</span>` : ""}${done ? "" : x.past ? `<span class="chip warn">Missed</span>` : x===upcoming[0] ? `<span class="chip">Next</span>` : ""}</li>`; }).join("")}</ul>`
       : `<span class="small muted">No more time reminders today.${nr ? ` Next: <b>${esc(nr.r.title)}</b> · ${esc(whenLabel(nr.t))}` : ""}</span>`}
     ${geo.length ? `<span class="sub" style="margin-top:2px">By location</span>${geo.slice(0,4).map(([,g]) => `<div class="between small"><span>${g.when==="exit" ? "↗ Leaving" : "↘ At"} <b>${esc(places[g.placeId].name)}</b>${geoDays(g).length < 7 ? ` <span class="tiny muted">${esc(daysLabel(geoDays(g)))}</span>` : ""}</span><span class="muted" style="text-align:right;flex:1;margin-left:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.title)}</span></div>`).join("")}` : ""}
   </div>`;
@@ -1800,6 +1826,7 @@ function renderReminders(){
         <div class="presets"><button type="button" data-act="r-days" data-k="0123456">Every day</button><button type="button" data-act="r-days" data-k="12345">Mon – Fri</button><button type="button" data-act="r-days" data-k="123456">Mon – Sat</button><button type="button" data-act="r-days" data-k="06">Weekends</button></div>
       </div>
       <div id="r-date-wrap" hidden><input class="field" id="r-date" type="date" value="${dayKey(state.now)}" min="${dayKey(state.now)}" aria-label="Date"></div>
+      <label class="checkline" for="r-alarm"><input type="checkbox" id="r-alarm" data-live="1"> ⏰ Ring as alarm <span class="tiny muted">(keeps ringing until you stop it)</span></label>
       <div id="r-dom-wrap" hidden><label class="flabel" for="r-dom">Day of the month <span>1 to 31. In shorter months it fires on the last day.</span><input class="field" id="r-dom" inputmode="numeric" value="5"></label></div>
       <button class="btn block" type="submit">Add reminder</button>
       ${presets.length ? `<span class="tiny muted">Quick add</span><div class="presets">${presets.map(([p,i]) => `<button type="button" data-act="preset" data-i="${i}">${esc(p.title)} · ${p.repeat==="monthly" ? `${p.dom}th monthly` : p.time}</button>`).join("")}</div>` : ""}
@@ -1808,10 +1835,11 @@ function renderReminders(){
       const nf = nextFire(r, state.now), on = r.enabled!==false;
       const rep = r.repeat==="once" ? (()=>{ const dd = parseDay(r.date); return `Once · ${dd.getDate()} ${MON[dd.getMonth()]}`; })()
         : r.repeat==="monthly" ? `Every month on day ${r.dom}` : daysLabel(remDays(r));
-      return `<li class="wrap ${on?"":"off"}"><span class="rtime">${esc(r.time)}</span>
-        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta"><span>${esc(rep)}</span>${on ? (nf ? `<span class="chip">Next: ${esc(whenLabel(nf))}</span>` : `<span class="chip warn">Finished</span>`) : `<span>Paused</span>`}</span></div>
+      const today = firesOn(r, state.now), done = today && remDoneToday(id, r);
+      return `<li class="wrap ${on?"":"off"} ${done ? "done" : ""}">${today ? `<button class="check" data-act="rem-done" data-id="${id}" aria-pressed="${done}" aria-label="Done today">${CHECK}</button>` : ""}<span class="rtime">${esc(r.time)}</span>
+        <div class="main"><span class="title">${esc(r.title)}</span><span class="meta"><span>${esc(rep)}</span>${!on ? `<span>Paused</span>` : done ? `<span class="chip good">Done today</span>` : nf ? `<span class="chip">Next: ${esc(whenLabel(nf))}</span>` : `<span class="chip warn">Finished</span>`}</span></div>
         <button class="switch" role="switch" aria-checked="${on}" aria-label="Reminder on or off" data-act="ron" data-id="${id}"></button>
-        ${delBtn(id)}${remDays(r) ? `<div class="daysrow">${dayChips(remDays(r), "rem-day", id, true)}</div>` : ""}</li>`;
+        ${delBtn(id)}<div class="daysrow">${remDays(r) ? dayChips(remDays(r), "rem-day", id, true) : ""}<button type="button" class="chip ${r.alarm ? "warn" : ""}" style="border:0;margin-top:6px" data-act="rem-alarm" data-id="${id}">${r.alarm ? "⏰ Rings as alarm" : "🔔 Notification"} · change</button></div></li>`;
     }).join("")}</ul>` : `<div class="empty"><p>No reminders yet. Use quick add above for water, workouts, expenses and bill payments.</p></div>`}
   ${renderGeo()}`;
 }
@@ -1954,6 +1982,8 @@ document.addEventListener("click", e => {
   if (act==="refresh-prices"){ refreshPrices(true); return; }
   if (act==="geo-allow"){ try { bridge.requestLocation(false); } catch(_){} return; }
   if (act==="geo-bg"){ try { bridge.requestLocation(true); } catch(_){ try { bridge.openAppSettings(); } catch(__){} } return; }
+  if (act==="rem-done" && it){ toggleRemDone(id); return; }
+  if (act==="rem-alarm" && it){ updateItem(id, {alarm: !it.alarm}); toast(it.alarm ? "Back to a normal notification" : "Will ring as an alarm"); return; }
   if (act==="r-day"){
     const d = Number(b.dataset.d), cur = new Set(state.rDays || ALL_DAYS);
     if (cur.has(d)){ if (cur.size === 1){ toast("Keep at least one day."); return; } cur.delete(d); } else cur.add(d);
@@ -2318,7 +2348,7 @@ document.addEventListener("submit", e => {
     const dom = parseInt(val("r-dom"), 10);
     if (repeat==="monthly" && !(dom >= 1 && dom <= 31)){ toast("Day of the month must be 1 to 31."); return; }
     const days = (state.rDays || ALL_DAYS).slice().sort(), rp = repeat==="days" ? (days.length===7 ? "daily" : "days") : repeat;
-    const r = {kind:"reminder", title, time, repeat: rp, days: rp==="days" ? days : [], date: repeat==="once" ? val("r-date") : "", dom: repeat==="monthly" ? dom : 1, enabled:true, created:Date.now()};
+    const r = {kind:"reminder", title, time, alarm: !!(document.getElementById("r-alarm")||{}).checked, repeat: rp, days: rp==="days" ? days : [], date: repeat==="once" ? val("r-date") : "", dom: repeat==="monthly" ? dom : 1, enabled:true, created:Date.now()};
     if (repeat==="once" && !nextFire(r, new Date())){ toast("That date and time has already passed."); return; }
     clear("r-title"); addReminder(r);
   }
