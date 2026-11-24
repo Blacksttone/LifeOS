@@ -1850,6 +1850,162 @@ const EXPERTS = [
    role:"a vehicle mechanic for bikes and cars: problems, servicing schedules, fair repair costs, buying used vehicles and fuel efficiency. Brake and steering problems mean stop riding and get it checked",
    q:["Bike not starting in the morning","Service checklist for my car","What to check in a used bike?"]},
 ];
+/* Each expert's own knowledge: working rules and checklists, plus the sources they trust.
+   Numbers that change (slabs, rates, prices, limits) are checked on the web before quoting. */
+const KNOWLEDGE = {
+  ca: {facts:[
+    "Indian financial year runs April to March; the assessment year is the year after. Check this year's slabs, rebate and standard deduction on incometax.gov.in before quoting numbers.",
+    "New tax regime is the default; the old regime suits people with large deductions (80C, 80D, HRA, home-loan interest). Always compare both with the person's actual numbers.",
+    "Interest from FDs, savings and P2P lending (like LenDenClub) is 'income from other sources', taxed at slab rate; it must be reported even if no TDS was cut.",
+    "Before filing, match income with Form 26AS and AIS/TIS; mismatches cause notices.",
+    "Pick the ITR form by income type: salary and other sources usually ITR-1/ITR-2; business or profession ITR-3/ITR-4. Mention the due dates and the late fee if missed.",
+    "Advance tax applies when tax due after TDS is above the threshold; quarterly instalments.",
+    "GST registration depends on turnover thresholds and type of business; check the current limit for the state.",
+    "Keep salary slips, Form 16, bank interest certificates, investment proofs and rent receipts for several years."],
+    src:["incometax.gov.in","gst.gov.in","cbic.gov.in","icai.org (verify a CA's membership)"]},
+  auditor: {facts:[
+    "Start with reconciliation: bank statements vs app records, month by month; every unexplained gap is a finding.",
+    "Look for leaks: unused subscriptions, duplicate EMIs, high bank charges, cash withdrawals without records, late fees and penalty interest.",
+    "Check income side too: all interest, rent and side income recorded and matched with AIS.",
+    "For a small shop: daily cash book, stock register, purchase and sales bills, GST returns matching books.",
+    "Red flags: personal and business money mixed, loans to friends without paper, investments with 'guaranteed' high returns.",
+    "Report findings as: what is wrong, why it matters, how much money is at stake, what to fix first."],
+    src:["incometax.gov.in (AIS)","rbi.org.in","gst.gov.in"]},
+  wealth: {facts:[
+    "Order of steps: emergency fund (about 6 months of expenses), health and term insurance, clear high-interest debt, then invest.",
+    "Asset allocation by goal and time: money needed within 3 years stays in safe options (FD, liquid funds); long-term money can go to equity.",
+    "Prefer direct plans of mutual funds for lower expense ratios; index funds are a simple low-cost core.",
+    "P2P lending (RBI-regulated NBFC-P2P platforms such as LenDenClub) is high risk: borrowers default, returns are not guaranteed, money can be locked. Keep it a small part of the portfolio and spread across many borrowers.",
+    "Diversify; no single stock or product should hold most of the money. Rebalance once a year.",
+    "Show both upside and downside; never promise returns. Mention costs: expense ratio, exit load, taxes on gains.",
+    "Only SEBI-registered investment advisers can charge for personalised advice; beware tips on WhatsApp or Telegram."],
+    src:["sebi.gov.in (check registered advisers)","amfiindia.com","rbi.org.in","nseindia.com","bseindia.com","valueresearchonline.com"]},
+  planner: {facts:[
+    "Start from cash flow: monthly income, fixed costs, variable costs, EMIs and what is left.",
+    "A simple split like needs / wants / savings (for example 50/30/20) is a starting point; adjust to the person's reality.",
+    "Debt plan: list all loans with interest rate; pay minimums on all and extra on the highest rate first (avalanche) or the smallest balance first (snowball) if motivation matters.",
+    "Every goal needs an amount, a date and a monthly saving; inflation raises future costs (education and health rise faster).",
+    "Retirement corpus is often estimated as about 25-30 times annual expenses at retirement; show the maths.",
+    "Insurance before investing: term cover for dependents and health cover for the family.",
+    "Review the plan every 6-12 months or after big life changes."],
+    src:["rbi.org.in","sebi.gov.in","incometax.gov.in","amfiindia.com"]},
+  insurance: {facts:[
+    "Term insurance cover is commonly 10-15 times annual income plus loans; pure term is cheaper than endowment or ULIP for protection.",
+    "Health insurance: check room-rent limits, co-pay, waiting periods for pre-existing diseases, sub-limits, restoration and network hospitals.",
+    "Compare claim settlement ratios and complaint numbers from IRDAI data, not ads.",
+    "Disclose all health conditions honestly; non-disclosure is the most common reason for rejected claims.",
+    "Vehicle: third-party cover is compulsory; zero-depreciation add-on is useful for new vehicles.",
+    "If a claim is rejected: ask for the reason in writing, complain to the insurer's grievance officer, then IRDAI Bima Bharosa, then the Insurance Ombudsman."],
+    src:["irdai.gov.in","bimabharosa.irdai.gov.in","cioins.co.in (Insurance Ombudsman)"]},
+  engineer: {facts:[
+    "Residential RCC usually uses M20 or higher concrete and Fe500/Fe500D or Fe550D steel; follow the structural engineer's drawing, not the mason's guess.",
+    "Curing: keep concrete wet for at least 7-14 days; poor curing causes cracks and weak slabs.",
+    "Cracks: thin hairline plaster cracks are usually shrinkage; wide (above about 3 mm), growing, diagonal cracks near doors or windows, or cracks in beams and columns need a structural engineer's site visit.",
+    "Dampness: find the source (leaking pipe, roof, rising damp) before repainting; waterproof the terrace and bathrooms.",
+    "Soil test before foundation for bigger buildings; follow IS 456 for concrete and the National Building Code.",
+    "Estimate costs per square foot from current local rates and break them into material and labour."],
+    src:["bis.gov.in (IS 456, NBC)","cpwd.gov.in (schedule of rates)","local corporation / panchayat building rules"]},
+  architect: {facts:[
+    "Every plan follows local building rules: setbacks, FSI/FAR, height and parking (in Tamil Nadu, the Tamil Nadu Combined Development and Building Rules; approvals through CMDA, DTCP or the local body).",
+    "Orientation in hot climates: fewer large windows on west, shade on south and west, cross ventilation for every room.",
+    "Room sizes: practical minimums for bedrooms, kitchens and bathrooms; keep circulation simple.",
+    "Natural light and ventilation reduce power bills; consider sunshades, light-coloured roofs and terrace insulation.",
+    "Vastu only when the person asks; offer it as an option, not a rule.",
+    "Get the plan, structural drawing and estimate before starting; changes later cost much more.",
+    "Check the architect is registered with the Council of Architecture."],
+    src:["coa.gov.in","tn.gov.in (TNCDBR)","cmdachennai.gov.in","dtcp.tn.gov.in","bis.gov.in (NBC)"]},
+  electrician: {facts:[
+    "India supplies 230 V, 50 Hz single phase to most homes; larger homes may have three phase.",
+    "Common wire sizes (copper): about 1.5 sq mm for lights and fans, 2.5 sq mm for 6/16 A sockets, 4 sq mm or more for AC and geyser circuits; follow the electrician's load calculation.",
+    "Protection: MCB per circuit sized to the wire; an RCCB/RCBO (30 mA) protects people from shock; proper earthing is essential.",
+    "MCB tripping again and again means overload, short circuit or earth leakage; do not replace it with a bigger MCB.",
+    "Safety first: before touching anything, switch off the main; live work on mains, meter or DB is only for a licensed electrician.",
+    "Saving power: 5-star appliances, inverter AC at 24-26 °C, LED lights, BLDC fans, check fridge door seals.",
+    "Solar rooftop: check net metering rules and subsidies of the state distribution company."],
+    src:["bis.gov.in (IS 732, IS 3043)","cea.nic.in","beeindia.gov.in (star ratings)","tnebltd.gov.in / state DISCOM","pmsuryaghar.gov.in"]},
+  plumber: {facts:[
+    "Pipes: CPVC or PPR for hot water, UPVC for cold water, PVC/SWR for drainage; use ISI-marked pipes.",
+    "Common supply sizes: about 3/4 inch for main lines, 1/2 inch for individual taps.",
+    "Leaking tap: usually a worn washer or cartridge; close the isolation valve before opening it.",
+    "Low pressure upstairs: check tank height, clogged aerators, air locks, pipe size; a pressure pump may help.",
+    "Clean overhead and sump tanks every 6 months; keep lids closed.",
+    "Bathroom leaks into walls or ceilings need waterproofing, not only grout.",
+    "Gas pipelines and major sewer work need licensed professionals."],
+    src:["bis.gov.in (pipe standards)","local water board / corporation"]},
+  designer: {facts:[
+    "Small rooms look bigger with light walls, mirrors, fewer and multi-use furniture, and storage up the wall.",
+    "Lighting in layers: ambient, task and accent; warm white (2700-3000 K) for bedrooms, neutral (4000 K) for kitchens and work areas.",
+    "Colours: pick one main, one secondary and one accent; consider light direction (south and west rooms get warmer light).",
+    "Indian homes need easy-clean surfaces, good kitchen ventilation and storage for festivals and guests.",
+    "Budget: spend on things used daily (bed, chair, kitchen), save on decor; get three quotes for modular work.",
+    "Check material grades (BWP plywood for wet areas, ISI laminates) and write warranty terms in the contract."],
+    src:["bis.gov.in","manufacturer catalogues"]},
+  lifeplanner: {facts:[
+    "Turn each goal into a next action, a weekly target and a review day.",
+    "Pick 1-3 priorities per day; time-block them early when energy is high.",
+    "Habit stacking: attach a new habit to an existing one; start very small and keep streaks.",
+    "Weekly review: what worked, what didn't, plan the next week, check LifeOS goals and missed habits.",
+    "Sleep 7-8 hours and plan rest; burnout ruins long-term plans.",
+    "Use the person's LifeOS goals, habits and reminders when they share them, and suggest reminders and habits they can add."],
+    src:["who.int (sleep and activity guidelines)"]},
+  lawyer: {facts:[
+    "Before buying land in Tamil Nadu: check title chain, Encumbrance Certificate (EC), patta and chitta, approved layout (DTCP/CMDA), and that the seller is the real owner; register the sale deed.",
+    "Rent: written agreement (often 11 months), deposit terms, notice period; keep receipts.",
+    "Consumer complaints: first a written complaint to the company, then the consumer commission (online through e-Daakhil) or the National Consumer Helpline.",
+    "Cheque bounce: a legal notice must be sent within a fixed time after the bank memo; then a case can be filed.",
+    "Cyber crime: complain on cybercrime.gov.in or call 1930.",
+    "Free legal aid is available through Legal Services Authorities for eligible people.",
+    "This is general information; anything going to court needs a registered advocate."],
+    src:["indiacode.nic.in","edaakhil.nic.in","consumerhelpline.gov.in","tnreginet.gov.in","eservices.tn.gov.in (patta)","nalsa.gov.in"]},
+  cyber: {facts:[
+    "Never share OTP, UPI PIN, card CVV or screen-sharing access; banks and police never ask for them.",
+    "You never need to enter your UPI PIN to receive money; a 'collect request' takes money from you.",
+    "After fraud: call 1930 at once (the first hour matters), report on cybercrime.gov.in, call the bank to block cards and accounts.",
+    "RBI rules limit the customer's loss when unauthorised transactions are reported quickly; report within 3 days.",
+    "Report fraud calls and messages on Sanchar Saathi (Chakshu); check which mobile numbers are in your name there.",
+    "Phone safety: screen lock, app updates, install apps only from the Play Store, no unknown APK files, two-step verification on email and WhatsApp.",
+    "Loan apps: check the lender is RBI-registered; harassment can be reported to police and RBI Sachet."],
+    src:["cybercrime.gov.in","sancharsaathi.gov.in","rbi.org.in","sachet.rbi.org.in","cert-in.org.in"]},
+  doctor: {facts:[
+    "Emergencies need care now, not advice: chest pain, breathing trouble, stroke signs (face drooping, arm weakness, speech trouble), heavy bleeding, fainting, high fever with confusion. Call 108.",
+    "Explain lab reports in simple words, compare with the lab's own reference range, and suggest which doctor to see.",
+    "Preventive checks for adults: blood pressure, blood sugar, lipids, weight/BMI, eyes and dental; more with age and family history.",
+    "No prescriptions, no medicine doses, no stopping prescribed medicines.",
+    "Lifestyle first: sleep, activity, diet, stress, no tobacco, limited alcohol."],
+    src:["mohfw.gov.in","icmr.gov.in","who.int","nhp.gov.in"]},
+  nutrition: {facts:[
+    "Follow ICMR-NIN dietary guidelines: a balanced plate with whole grains, pulses, vegetables, fruits, dairy or protein foods, nuts and limited oil, sugar and salt.",
+    "Protein: roughly 0.8-1 g per kg body weight for most adults; more when doing strength training. Good veg sources: dal, chana, rajma, paneer, curd, soya, peanuts.",
+    "South Indian swaps: more dal in idli/dosa batter, add vegetables to sambar and upma, millets (ragi, kambu) a few times a week.",
+    "Weight loss: small calorie deficit, enough protein, fewer fried and sugary snacks, regular sleep.",
+    "Diabetes: control portion of rice, prefer whole grains and millets, avoid sugary drinks; follow the doctor's advice.",
+    "No crash diets; supplements only when a test shows a need."],
+    src:["nin.res.in","icmr.gov.in","fssai.gov.in"]},
+  fitness: {facts:[
+    "WHO guideline: 150-300 minutes of moderate activity a week plus muscle-strengthening on 2 or more days.",
+    "Beginners: full-body workouts 3 days a week, increase slowly, learn form before adding weight.",
+    "Warm up 5-10 minutes, cool down and stretch; rest days matter.",
+    "Pain that is sharp, in joints, or does not go away is a reason to stop and see a doctor or physiotherapist.",
+    "Walking 7,000-10,000 steps a day is a simple base; combine with strength work.",
+    "Ask about injuries, health conditions and age before suggesting hard exercise."],
+    src:["who.int","fitindia.gov.in"]},
+  career: {facts:[
+    "Look at current job postings to see which skills are asked for and the salary range.",
+    "Resume: one or two pages, results with numbers, keywords from the job description.",
+    "Free learning: NPTEL, SWAYAM, Skill India; certifications only when the market asks for them.",
+    "Interview: prepare stories for common questions, research the company, ask good questions.",
+    "Salary: know the market range, negotiate on total pay, get offers in writing.",
+    "Beware job offers that ask for payment; real employers don't charge for jobs."],
+    src:["ncs.gov.in","swayam.gov.in","nptel.ac.in","skillindiadigital.gov.in","linkedin.com","naukri.com"]},
+  mechanic: {facts:[
+    "Follow the owner's manual service intervals for engine oil, filters, brake fluid and coolant.",
+    "Check tyre pressure monthly (cold tyres), chain slack and lube for bikes, brake pads and battery.",
+    "Bike not starting in the morning: weak battery, choke, spark plug, fuel; check the simple things first.",
+    "Brake or steering problems mean stop riding and get it checked; don't experiment.",
+    "Used vehicle: check RC, insurance, PUC and challans on Parivahan, engine sound, smoke, accident repairs, and do a test ride.",
+    "Keep insurance and PUC valid; renew on time."],
+    src:["parivahan.gov.in","morth.nic.in","manufacturer owner's manual"]},
+};
 const EXPERT_RULES = `You are an expert inside LifeOS, a personal life app used by one person in India. Your role is given below.
 How to answer:
 - Reply in the language the person writes in. If they mix Tamil and English in Latin letters, reply the same way with simple words.
@@ -1859,6 +2015,19 @@ How to answer:
 - Be honest. Don't invent figures; if you need details, ask one or two short questions.
 - Be practical and brief: lead with the answer, then steps, then cautions. Short bullet points. Money in ₹ with Indian number format (₹1,25,000).
 - This is general guidance, not a signed professional opinion.`;
+function expertNotes(k){ return byKind("xnote").filter(([,n]) => n.expert===k); }
+function expertSystem(ex){
+  const kn = KNOWLEDGE[ex.k] || {facts:[], src:[]}, notes = expertNotes(ex.k).slice(-30);
+  return [EXPERT_RULES, "",
+    `Your role: ${ex.n} - ${ex.role}.`, "",
+    "Your working knowledge (verify any number that may have changed with a web search before quoting it):",
+    ...kn.facts.map(f => "- " + f), "",
+    "Sources you trust most (search these first, and say when you rely on another source):",
+    ...kn.src.map(x => "- " + x),
+    notes.length ? "\nWhat this person has told you to remember (use it, don't repeat it back):" : "",
+    ...notes.map(([,n]) => "- " + String(n.text).slice(0, 1200)),
+    "", `Today is ${dayKey(new Date())}.`].filter(x => x !== undefined).join("\n");
+}
 const CHAT_KEY = "lifeos-chats";
 function chatsLoad(){ try { return JSON.parse(localStorage.getItem(CHAT_KEY) || "{}"); } catch(e){ return {}; } }
 function chatsSave(c){ try { localStorage.setItem(CHAT_KEY, JSON.stringify(c)); } catch(e){ toast("Couldn't save the chat on this phone."); } }
@@ -1905,10 +2074,24 @@ function askExpert(k, text){
   list.push({role:"user", text:text.trim(), at:Date.now()}); chats[k] = list; chatsSave(chats);
   const history = list.filter(m => m.role==="user" || m.role==="assistant").slice(-12).map(m => ({role:m.role, text:m.text}));
   if (state.xShare && history.length){ const last = history[history.length-1]; last.text = `My LifeOS data (I chose to share this):\n${lifeosSummary()}\n\nMy question: ${last.text}`; }
-  const system = `${EXPERT_RULES}\n\nYour role: ${ex.n} - ${ex.role}.\nToday is ${dayKey(new Date())}.`;
+  const system = expertSystem(ex);
   const id = newId(); pendingAsk[id] = {k};
   state.xBusy = true; render(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 50);
   try { bridge.askExpert(id, system, JSON.stringify(history)); } catch(e){ delete pendingAsk[id]; state.xBusy = false; toast("Update the app to use experts."); render(); }
+}
+function expertKnowledgePanel(ex){
+  const kn = KNOWLEDGE[ex.k] || {facts:[], src:[]}, notes = expertNotes(ex.k);
+  return `<details class="winbox" id="xk-${ex.k}"><summary>📚 ${esc(ex.n)}'s knowledge · ${kn.facts.length} built-in${notes.length ? ` · ${notes.length} yours` : ""}</summary>
+    <div class="stack" style="margin-top:6px">
+      <span class="sub">Built in</span>
+      <ul class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${kn.facts.map(f => `<li>${esc(f)}</li>`).join("")}</ul>
+      <span class="sub">Trusted sources</span>
+      <div class="presets">${kn.src.map(x => { const host = x.split(" ")[0]; return /\./.test(host) ? `<a class="chip" style="text-decoration:none" href="https://${esc(host)}">${esc(x)}</a>` : `<span class="chip">${esc(x)}</span>`; }).join("")}</div>
+      <span class="sub">Your notes for ${esc(ex.n)}</span>
+      <span class="tiny muted">Facts about you this expert should always remember: your salary, house size, loans, health conditions, vehicle model. Stored only on this phone and in your backups.</span>
+      ${notes.length ? `<ul class="list">${notes.map(([id,n]) => `<li><div class="main"><span class="small" style="white-space:pre-wrap">${esc(n.text)}</span></div>${delBtn(id)}</li>`).join("")}</ul>` : ""}
+      <form class="stack" id="xk-form" autocomplete="off"><textarea class="field" id="xk-in" data-live="1" maxlength="1200" style="min-height:56px" placeholder="e.g. Salary ₹12 lakh a year, home loan ₹25 lakh at 8.5%"></textarea><button class="btn ghost" type="submit">Add note</button></form>
+    </div></details>`;
 }
 function renderExperts(){
   if (!canExperts()) return `<div class="card"><h3>Experts</h3><span class="small muted">Experts work in the Android app. Update LifeOS to use them.</span></div>`;
@@ -1918,10 +2101,11 @@ function renderExperts(){
     return `<div class="between"><button class="btn ghost" data-act="x-back">‹ All experts</button>${list.length ? `<button class="del" data-act="x-clear">Clear chat</button>` : ""}</div>
       <div class="card" style="flex-direction:row;align-items:center;gap:12px"><span style="font-size:32px">${ex.e}</span><div class="main"><b class="mid">${esc(ex.n)}</b><span class="tiny muted">${esc(ex.d)} · searches the web for current info</span></div></div>
       ${!keyOk ? `<div class="notice"><span class="small">Add your Anthropic API key to start.</span><button class="btn" data-act="x-back">Set up</button></div>` : ""}
+      ${expertKnowledgePanel(ex)}
       <div class="chatlog">
-        ${list.length ? list.map(m => m.role==="user" ? `<div class="bub me">${esc(m.text)}</div>`
+        ${list.length ? list.map((m, mi) => m.role==="user" ? `<div class="bub me">${esc(m.text)}</div>`
           : m.role==="error" ? `<div class="bub err">${esc(m.text)}</div>`
-          : `<div class="bub ai">${mdLite(m.text)}${(m.sources||[]).length ? `<div class="srcs"><span class="tiny muted">Sources</span>${m.sources.map(s2 => `<a href="${esc(s2.url)}">🔗 ${esc(s2.title || s2.url)}</a>`).join("")}</div>` : ""}</div>`).join("")
+          : `<div class="bub ai">${mdLite(m.text)}${(m.sources||[]).length ? `<div class="srcs"><span class="tiny muted">Sources</span>${m.sources.map(s2 => `<a href="${esc(s2.url)}">🔗 ${esc(s2.title || s2.url)}</a>`).join("")}</div>` : ""}<div style="margin-top:6px"><button class="del" data-act="x-savekn" data-i="${mi}">📚 Save to knowledge</button></div></div>`).join("")
           : `<span class="small muted">Ask anything. Try one of these:</span><div class="presets">${ex.q.map((q,i) => `<button type="button" data-act="x-q" data-i="${i}">${esc(q)}</button>`).join("")}</div>`}
         ${state.xBusy ? `<div class="typing">${ex.e} Searching the web and thinking… this can take up to a minute.</div>` : ""}
       </div>
@@ -1949,7 +2133,7 @@ function renderExperts(){
         </div></details>`}
     </div>
     <div class="xgrid">${EXPERTS.map(ex => { const n = (chats[ex.k]||[]).length;
-      return `<button class="xtile" data-act="x-open" data-k="${ex.k}"><span class="xe">${ex.e}</span><b>${esc(ex.n)}</b><span>${esc(ex.d)}</span>${n ? `<span class="xc">${Math.ceil(n/2)} question${n>2?"s":""} asked</span>` : ""}</button>`; }).join("")}</div>
+      return `<button class="xtile" data-act="x-open" data-k="${ex.k}"><span class="xe">${ex.e}</span><b>${esc(ex.n)}</b><span>${esc(ex.d)}</span>${n || expertNotes(ex.k).length ? `<span class="xc">${n ? `${Math.ceil(n/2)} asked` : ""}${n && expertNotes(ex.k).length ? " · " : ""}${expertNotes(ex.k).length ? `📚 ${expertNotes(ex.k).length} notes` : ""}</span>` : ""}</button>`; }).join("")}</div>
     <span class="tiny muted">Your questions and anything you choose to share are sent to Anthropic to get the answer. Chats are saved only on this phone.</span>`;
 }
 
@@ -2175,6 +2359,12 @@ document.addEventListener("click", e => {
   if (act==="refresh-prices"){ refreshPrices(true); return; }
   if (act==="geo-allow"){ try { bridge.requestLocation(false); } catch(_){} return; }
   if (act==="geo-bg"){ try { bridge.requestLocation(true); } catch(_){ try { bridge.openAppSettings(); } catch(__){} } return; }
+  if (act==="x-savekn"){
+    const m = (chatsLoad()[state.xOpen] || [])[Number(b.dataset.i)]; if (!m) return;
+    const text = String(m.text).replace(/\*\*/g, "").slice(0, 1200);
+    setItem(newId(), {kind:"xnote", expert:state.xOpen, text, created:Date.now()});
+    toast("Saved to this expert's knowledge"); return;
+  }
   if (act==="x-open"){ state.xOpen = b.dataset.k; render(); window.scrollTo(0,0); return; }
   if (act==="x-back"){ state.xOpen = null; render(); window.scrollTo(0,0); return; }
   if (act==="x-q"){ const ex = EXPERTS.find(x => x.k===state.xOpen); if (ex) askExpert(ex.k, ex.q[Number(b.dataset.i)]); return; }
@@ -2523,6 +2713,12 @@ document.addEventListener("submit", e => {
     const patch = {waterGoal:g("g-water"), sleepGoal:g("g-sleep"), stepsGoal:g("g-steps"), workoutGoal:g("g-workout")};
     if (Object.values(patch).some(v => !isFinite(v) || v <= 0)){ toast("Each goal needs a number above zero."); return; }
     saveSettings(patch); toast("Goals saved");
+  }
+  if (f.id==="xk-form"){
+    const t = valOf("xk-in").trim(); if (!t || !state.xOpen) return;
+    const el = document.getElementById("xk-in"); if (el) el.value = "";
+    setItem(newId(), {kind:"xnote", expert:state.xOpen, text:t.slice(0, 1200), created:Date.now()});
+    toast("Note added. This expert will remember it."); return;
   }
   if (f.id==="x-form"){
     const t = valOf("x-in").trim(); if (!t || !state.xOpen) return;
