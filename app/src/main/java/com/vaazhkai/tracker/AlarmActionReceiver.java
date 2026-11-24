@@ -4,15 +4,17 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-/** Dismiss and Snooze buttons on the alarm notification. */
+/** Done and Snooze buttons on the reminder notification. */
 public class AlarmActionReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         int idx = intent.getIntExtra("idx", 0);
+        String rid = intent.getStringExtra("rid");
         if ("com.vaazhkai.tracker.ALARM_SNOOZE".equals(intent.getAction())) {
-            Alarms.snooze(context, idx, intent.getStringExtra("title"), intent.getStringExtra("time"));
+            Alarms.snooze(context, idx, intent.getStringExtra("title"), intent.getStringExtra("time"),
+                    intent.getBooleanExtra("insistent", false), rid);
         } else {
-            Alarms.stop(context, idx);
+            Alarms.done(context, idx, rid);
         }
     }
 }

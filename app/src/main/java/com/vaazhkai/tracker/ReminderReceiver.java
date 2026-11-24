@@ -20,12 +20,16 @@ public class ReminderReceiver extends BroadcastReceiver {
         String time = intent.getStringExtra("time");
         int idx = intent.getIntExtra("idx", 0);
         boolean snooze = intent.getBooleanExtra("snooze", false);
-        boolean alarm = intent.getBooleanExtra("alarm", false);
+        boolean alarm = intent.getBooleanExtra("insistent", intent.getBooleanExtra("alarm", false));
+        boolean full = snooze;
+        String rid = intent.getStringExtra("rid");
         boolean skip = false;
         if (!snooze) {
             org.json.JSONObject o = ReminderScheduler.load(context).optJSONObject(idx);
             if (o != null) {
                 alarm = o.optBoolean("alarm", false);
+                full = o.optBoolean("full", false);
+                rid = o.optString("id", "");
                 // Ticked as done for today in the app: stay quiet.
                 String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
                 skip = today.equals(o.optString("skip", ""));
@@ -36,8 +40,8 @@ public class ReminderReceiver extends BroadcastReceiver {
         boolean allowed = Build.VERSION.SDK_INT < 33
                 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
 
-        if (nm != null && allowed && title != null && !skip && alarm) {
-            Alarms.ring(context, idx, title, time);
+        if (nm != null && allowed && title != null && !skip && (alarm || full)) {
+            Alarms.ring(context, idx, title, time, alarm, rid);
         } else if (nm != null && allowed && title != null && !skip) {
             NotificationChannel ch = new NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH);
             ch.setDescription("Reminders you set in LifeOS");

@@ -408,11 +408,18 @@ function toggleRemDone(id){
   for (const key of Object.keys(dl)) if (key < dayKey(shift("day", state.now, 60))) delete dl[key];
   updateItem(id, {doneLog: dl});
 }
+function applyNativeDone(){
+  if (!bridge || typeof bridge.takeDoneReminders !== "function") return;
+  let q = []; try { q = JSON.parse(bridge.takeDoneReminders() || "[]"); } catch(e){ return; }
+  let n = 0;
+  for (const x of q){ const r = state.items.get(x.id); if (r && x.date===dayKey(new Date()) && !remDoneToday(x.id, r)){ toggleRemDone(x.id); n++; } }
+  if (n) toast(n===1 ? "Marked done from the reminder" : `${n} reminders marked done`);
+}
 function syncReminders(){
   if (!bridge) return;
   const list = byKind("reminder").map(([id,r]) => { const d = remDays(r);
     return {title:r.title, time:r.time, repeat: d ? "days" : r.repeat, days: d || [], date:r.date||"", dom:r.dom||1, enabled:r.enabled!==false,
-      alarm: !!r.alarm, skip: remDoneToday(id, r) ? dayKey(state.now) : ""}; });
+      alarm: !!r.alarm, full: settings().remFull !== false, id, skip: remDoneToday(id, r) ? dayKey(state.now) : ""}; });
   try { bridge.setReminders(JSON.stringify(list)); } catch(e){}
 }
 /* ---------- location reminders (geofences) ---------- */
@@ -1812,7 +1819,14 @@ function renderReminders(){
   else if (list.length && !notifAllowed()) notice = `<div class="notice"><span>Notifications are off, so reminders can't show up.</span><button class="btn" data-act="notif">Allow</button></div>`;
   const have = new Set(list.map(([,r])=>r.title));
   const presets = PRESETS.map((p,i)=>[p,i]).filter(([p])=>!have.has(p.title));
-  return `${notice}
+  const fullOn = settings().remFull !== false;
+  let fsOk = true; try { fsOk = !bridge || typeof bridge.fullScreenAllowed !== "function" || bridge.fullScreenAllowed(); } catch(e){}
+  const fullCard = bridge && typeof bridge.takeDoneReminders === "function" ? `<div class="card">
+      <label class="checkline" for="rf-full"><input type="checkbox" id="rf-full" data-live="1" ${fullOn ? "checked" : ""}> <b>Show reminders full screen</b></label>
+      <span class="tiny muted">On the lock screen: swipe right when done (it's ticked here too), swipe left to snooze 10 min. Reminders set to ⏰ alarm keep ringing until you swipe.</span>
+      ${fullOn && !fsOk ? `<div class="notice"><span class="small">Android has full-screen reminders turned off for LifeOS.</span><button class="btn" data-act="fs-settings">Allow</button></div>` : ""}
+    </div>` : "";
+  return `${notice}${fullCard}
     <form class="card" id="rem-form" autocomplete="off">
       <h3>New reminder</h3>
       <input class="field" id="r-title" maxlength="100" placeholder="Remind me to…" aria-label="Reminder text">
@@ -1982,6 +1996,7 @@ document.addEventListener("click", e => {
   if (act==="refresh-prices"){ refreshPrices(true); return; }
   if (act==="geo-allow"){ try { bridge.requestLocation(false); } catch(_){} return; }
   if (act==="geo-bg"){ try { bridge.requestLocation(true); } catch(_){ try { bridge.openAppSettings(); } catch(__){} } return; }
+  if (act==="fs-settings"){ try { bridge.openFullScreenSettings(); } catch(_){} return; }
   if (act==="rem-done" && it){ toggleRemDone(id); return; }
   if (act==="rem-alarm" && it){ updateItem(id, {alarm: !it.alarm}); toast(it.alarm ? "Back to a normal notification" : "Will ring as an alarm"); return; }
   if (act==="r-day"){
@@ -2188,6 +2203,7 @@ document.addEventListener("change", e => {
   }
   if (t.id==="w-type"){ state.wType = t.value; state.wResults = []; state.wErr = ""; const wv = document.getElementById("w-val"); if (wv) wv.placeholder = t.value===P2P ? "Amount lent ₹" : "Current value ₹"; syncFormVisibility(); }
   if (t.id==="w-reinvest") p2pPreview();
+  if (t.id==="rf-full"){ saveSettings({remFull: t.checked}); syncReminders(); toast(t.checked ? "Reminders will show full screen" : "Reminders will show as notifications"); return; }
   if (t.id==="bk-auto"){ lsSet(BK_AUTO, t.checked ? "1" : "0"); toast(t.checked ? "Daily backup on" : "Daily backup off"); return; }
   if (t.dataset.hold){
     const it = state.items.get(t.dataset.hid); if (!it) return;
@@ -2390,7 +2406,8 @@ render();
 checkUpdate(false);
 refreshPrices(false);
 setTimeout(autoBackup, 3000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) maybeCheckUpdate(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden){ maybeCheckUpdate(); applyNativeDone(); } });
+applyNativeDone();
 })();
 </script>
 </body>

@@ -12,6 +12,25 @@ public class Bridge {
     @JavascriptInterface
     public boolean isApp() { return true; }
 
+    /* Full-screen reminders */
+    @JavascriptInterface
+    public String takeDoneReminders() { return Alarms.takeDone(activity); }
+
+    @JavascriptInterface
+    public boolean fullScreenAllowed() { return Alarms.fullScreenAllowed(activity); }
+
+    @JavascriptInterface
+    public void openFullScreenSettings() {
+        activity.runOnUiThread(() -> {
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= 34) {
+                    activity.startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            android.net.Uri.parse("package:" + activity.getPackageName())));
+                } else activity.openAppSettings();
+            } catch (Exception e) { activity.openAppSettings(); }
+        });
+    }
+
     /* Location reminders */
     @JavascriptInterface
     public String locationStatus() { return Geo.status(activity); }
