@@ -1,33 +1,24 @@
 package com.vaazhkai.tracker;
 
-import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.core.JsonValue;
-import com.anthropic.errors.AnthropicServiceException;
-import com.anthropic.errors.RateLimitException;
-import com.anthropic.errors.UnauthorizedException;
-import com.anthropic.models.messages.ContentBlock;
-import com.anthropic.models.messages.Message;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.OutputConfig;
-import com.anthropic.models.messages.StopReason;
-import com.anthropic.models.messages.TextCitation;
-import com.anthropic.models.messages.WebSearchResultBlock;
-import com.anthropic.models.messages.WebSearchTool20260209;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.time.Duration;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * Asks Claude, as one of the app's experts, with live web search so answers come with sources.
- * Plain Java (no Android types) so it can be compiled and checked on its own.
+ * Plain HTTPS + org.json (no SDK) to keep the APK small.
  */
 final class ExpertsApi {
     static final String MODEL = "claude-opus-5-5";
+    private static final String URL_MESSAGES = "https://api.anthropic.com/v1/messages";
 
     private ExpertsApi() {}
 
@@ -38,59 +29,67 @@ final class ExpertsApi {
     static String ask(String apiKey, String system, String history) {
         JSONObject out = new JSONObject();
         try {
-            AnthropicClient client = AnthropicOkHttpClient.builder()
-                    .apiKey(apiKey)
-                    .timeout(Duration.ofMinutes(4))
-                    .maxRetries(2)
-                    .build();
-
-            MessageCreateParams.Builder b = MessageCreateParams.builder()
-                    .model(MODEL)
-                    .maxTokens(16000L)
-                    .system(system)
-                    .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.MEDIUM).build())
-                    .addTool(WebSearchTool20260209.builder().maxUses(5L).build())
-                    // If a safety classifier declines, let the API retry on a fallback model.
-                    .putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
-                    .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"));
-
+            JSONArray messages = new JSONArray();
             JSONArray msgs = new JSONArray(history);
             for (int i = 0; i < msgs.length(); i++) {
                 JSONObject m = msgs.getJSONObject(i);
                 String text = m.optString("text", "");
                 if (text.isEmpty()) continue;
-                if ("assistant".equals(m.optString("role"))) b.addAssistantMessage(text);
-                else b.addUserMessage(text);
+                messages.put(new JSONObject().put("role", "assistant".equals(m.optString("role")) ? "assistant" : "user").put("content", text));
             }
+
+            JSONObject body = new JSONObject()
+                    .put("model", MODEL)
+                    .put("max_tokens", 16000)
+                    .put("system", system)
+                    .put("output_config", new JSONObject().put("effort", "medium"))
+                    .put("tools", new JSONArray().put(new JSONObject()
+                            .put("type", "web_search_20260209").put("name", "web_search").put("max_uses", 5)))
+                    // If a safety classifier declines, let the API retry on a fallback model.
+                    .put("fallbacks", "default")
+                    .put("messages", messages);
 
             StringBuilder text = new StringBuilder();
             Map<String, String> sources = new LinkedHashMap<>();
-            Message r = null;
+            String stop = "";
             // Server-side web search can pause a long turn; resume it a few times.
             for (int turn = 0; turn < 4; turn++) {
-                r = client.messages().create(b.build());
-                for (ContentBlock block : r.content()) {
-                    block.text().ifPresent(t -> {
-                        text.append(t.text());
-                        t.citations().ifPresent(list -> {
-                            for (TextCitation c : list) {
-                                c.webSearchResultLocation().ifPresent(w -> sources.putIfAbsent(w.url(), w.title().orElse(w.url())));
-                            }
-                        });
-                    });
-                    block.webSearchToolResult().ifPresent(res -> res.content().resultBlocks().ifPresent(list -> {
-                        for (WebSearchResultBlock w : list) sources.putIfAbsent(w.url(), w.title());
-                    }));
+                int[] code = new int[1];
+                String resp = post(apiKey, body.toString(), code);
+                if (code[0] != 200) { put(out, errorFor(code[0])); return out.toString(); }
+                JSONObject r = new JSONObject(resp);
+                JSONArray content = r.optJSONArray("content");
+                if (content == null) content = new JSONArray();
+                for (int i = 0; i < content.length(); i++) {
+                    JSONObject block = content.getJSONObject(i);
+                    String type = block.optString("type");
+                    if ("text".equals(type)) {
+                        text.append(block.optString("text"));
+                        JSONArray cites = block.optJSONArray("citations");
+                        if (cites != null) for (int c = 0; c < cites.length(); c++) {
+                            JSONObject ci = cites.getJSONObject(c);
+                            String u = ci.optString("url", "");
+                            if (!u.isEmpty()) sources.putIfAbsent(u, ci.optString("title", u));
+                        }
+                    } else if ("web_search_tool_result".equals(type)) {
+                        JSONArray res = block.optJSONArray("content");
+                        if (res != null) for (int c = 0; c < res.length(); c++) {
+                            JSONObject w = res.getJSONObject(c);
+                            String u = w.optString("url", "");
+                            if (!u.isEmpty()) sources.putIfAbsent(u, w.optString("title", u));
+                        }
+                    }
                 }
-                if (r.stopReason().map(s -> s.equals(StopReason.PAUSE_TURN)).orElse(false)) {
-                    b.addMessage(r);
+                stop = r.optString("stop_reason", "");
+                if ("pause_turn".equals(stop)) {
+                    messages.put(new JSONObject().put("role", "assistant").put("content", content));
                     continue;
                 }
                 break;
             }
 
-            if (r != null && r.stopReason().map(s -> s.equals(StopReason.REFUSAL)).orElse(false) && text.length() == 0) {
-                out.put("ok", false).put("error", "This question couldn't be answered. Try asking it differently.");
+            if ("refusal".equals(stop) && text.length() == 0) {
+                put(out, "This question couldn't be answered. Try asking it differently.");
                 return out.toString();
             }
 
@@ -100,18 +99,61 @@ final class ExpertsApi {
                 src.put(new JSONObject().put("url", e.getKey()).put("title", e.getValue()));
             }
             out.put("ok", true).put("text", text.toString().trim()).put("sources", src);
-        } catch (UnauthorizedException e) {
-            put(out, "The API key isn't valid. Check it in Experts → Settings.");
-        } catch (RateLimitException e) {
-            put(out, "Too many requests right now. Wait a minute and try again.");
-        } catch (AnthropicServiceException e) {
-            put(out, e.statusCode() == 402 || e.statusCode() == 403
-                    ? "Your Anthropic account can't make this request. Check billing and credits in the Anthropic Console."
-                    : "The service had a problem (" + e.statusCode() + "). Try again.");
         } catch (Exception e) {
             put(out, "Couldn't reach the expert. Check your internet connection.");
         }
         return out.toString();
+    }
+
+    private static String errorFor(int code) {
+        if (code == 401) return "The API key isn't valid. Check it in Experts.";
+        if (code == 429) return "Too many requests right now. Wait a minute and try again.";
+        if (code == 402 || code == 403) return "Your Anthropic account can't make this request. Check billing and credits in the Anthropic Console.";
+        return "The service had a problem (" + code + "). Try again.";
+    }
+
+    private static String post(String apiKey, String json, int[] code) throws Exception {
+        Exception last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            HttpURLConnection c = (HttpURLConnection) new URL(URL_MESSAGES).openConnection();
+            try {
+                c.setRequestMethod("POST");
+                c.setConnectTimeout(20000);
+                c.setReadTimeout(240000);
+                c.setDoOutput(true);
+                c.setRequestProperty("content-type", "application/json");
+                c.setRequestProperty("x-api-key", apiKey);
+                c.setRequestProperty("anthropic-version", "2023-06-01");
+                c.setRequestProperty("anthropic-beta", "server-side-fallback-2026-07-01");
+                try (OutputStream o = c.getOutputStream()) { o.write(json.getBytes(StandardCharsets.UTF_8)); }
+                int status = c.getResponseCode();
+                InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
+                String resp = read(in);
+                if ((status == 429 || status == 529 || status >= 500) && attempt < 2) {
+                    Thread.sleep(2000L * (attempt + 1));
+                    continue;
+                }
+                code[0] = status;
+                return resp;
+            } catch (java.io.IOException e) {
+                last = e;
+                Thread.sleep(2000L * (attempt + 1));
+            } finally {
+                c.disconnect();
+            }
+        }
+        throw last != null ? last : new Exception("failed");
+    }
+
+    private static String read(InputStream in) throws Exception {
+        if (in == null) return "";
+        try (InputStream s = in) {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = s.read(buf)) > 0) b.write(buf, 0, n);
+            return b.toString("UTF-8");
+        }
     }
 
     private static void put(JSONObject o, String msg) {

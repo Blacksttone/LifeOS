@@ -32,12 +32,6 @@ android {
         }
         debug { signingConfig signingConfigs.app }
     }
-    packaging {
-        resources {
-            excludes += ["META-INF/versions/9/module-info.class", "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST"]
-            pickFirsts += ["META-INF/*"]
-        }
-    }
     lint {
         abortOnError false
         checkReleaseBuilds false
@@ -52,5 +46,4 @@ dependencies {
     implementation "androidx.webkit:webkit:1.14.0"
     implementation "androidx.core:core:1.17.0"
     implementation "com.google.android.gms:play-services-location:21.3.0"
-    implementation "com.anthropic:anthropic-java:3.3.0"
 }
