@@ -2033,6 +2033,43 @@ function chatsLoad(){ try { return JSON.parse(localStorage.getItem(CHAT_KEY) || 
 function chatsSave(c){ try { localStorage.setItem(CHAT_KEY, JSON.stringify(c)); } catch(e){ toast("Couldn't save the chat on this phone."); } }
 const canExperts = () => !!(bridge && typeof bridge.askExpert === "function");
 function hasExpertKey(){ try { return canExperts() && bridge.hasExpertKey(); } catch(e){ return false; } }
+function openExternal(url){
+  try { if (bridge && typeof bridge.openUrl === "function"){ bridge.openUrl(url); return; } } catch(e){}
+  const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+}
+function copyText(text){
+  try { if (bridge && typeof bridge.copyText === "function"){ bridge.copyText(text); return true; } } catch(e){}
+  try { navigator.clipboard && navigator.clipboard.writeText(text); return true; } catch(e){ return false; }
+}
+function expertPrompt(ex, question){
+  const kn = KNOWLEDGE[ex.k] || {facts:[], src:[]}, notes = expertNotes(ex.k).slice(-10);
+  return [`Act as my ${ex.n} (${ex.role}). I live in India.`,
+    "Rules: search the web for current info and cite official sources; never ask for OTPs, passwords or full card/Aadhaar numbers; warn me about scams; say clearly when I should see a licensed professional; be honest if unsure; keep it short and practical; use ₹.",
+    "Trusted sources: " + kn.src.join(", ") + ".",
+    "Key facts (verify numbers that may have changed):", ...kn.facts.slice(0, 8).map(f => "- " + f),
+    notes.length ? "About me (remember this):" : "", ...notes.map(([,n]) => "- " + String(n.text).slice(0, 300)),
+    state.xShare && ex.money ? "My LifeOS money summary:\n" + lifeosSummary() : "",
+    "", "My question: " + question].filter(Boolean).join("\n");
+}
+function logExpertNote(k, text, note){
+  const chats = chatsLoad(), list = chats[k] || [];
+  list.push({role:"user", text, ext:true, at:Date.now()}, {role:"note", text:note, at:Date.now()});
+  chats[k] = list; chatsSave(chats);
+}
+function askInClaude(ex, q){
+  const full = expertPrompt(ex, q);
+  const copied = copyText(full);
+  const url = "https://claude.ai/new?q=" + encodeURIComponent(full.length > 6000 ? full.slice(0, 6000) : full);
+  logExpertNote(ex.k, q, "Opened in the Claude app. The full question is copied too: if it isn't filled in, paste it there. Save useful answers in this expert's knowledge (Add note).");
+  render(); toast(copied ? "Question copied. Opening Claude…" : "Opening Claude…");
+  openExternal(url);
+}
+function searchTrusted(ex, q){
+  const hosts = ((KNOWLEDGE[ex.k] || {}).src || []).filter(x => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(x)).slice(0, 8);
+  const query = q + (hosts.length ? " (" + hosts.map(h => "site:" + h).join(" OR ") + ")" : "");
+  logExpertNote(ex.k, q, "Searched trusted sites: " + (hosts.join(", ") || "the web") + ".");
+  render(); openExternal("https://www.google.com/search?q=" + encodeURIComponent(query));
+}
 function lifeosSummary(){
   const nw = netWorth(), m = monthTotals(monthKey(state.now)), s = settings();
   const assets = byKind("asset").map(([,a]) => `${a.name} (${a.type}): ${inr(Number(a.value)||0)}${isP2P(a) ? `, ${a.rate}% a year, adds ${inr(a.monthly||0)} ${freqOf(a)}` : ""}${isLive(a) && a.units ? `, ${a.units} units` : ""}`);
@@ -2072,7 +2109,7 @@ function askExpert(k, text){
   if (!hasExpertKey()){ toast("Add your API key first."); return; }
   const chats = chatsLoad(), list = chats[k] || [];
   list.push({role:"user", text:text.trim(), at:Date.now()}); chats[k] = list; chatsSave(chats);
-  const history = list.filter(m => m.role==="user" || m.role==="assistant").slice(-12).map(m => ({role:m.role, text:m.text}));
+  const history = list.filter(m => (m.role==="user" && !m.ext) || m.role==="assistant").slice(-12).map(m => ({role:m.role, text:m.text}));
   if (state.xShare && history.length){ const last = history[history.length-1]; last.text = `My LifeOS data (I chose to share this):\n${lifeosSummary()}\n\nMy question: ${last.text}`; }
   const system = expertSystem(ex);
   const id = newId(); pendingAsk[id] = {k};
@@ -2100,19 +2137,24 @@ function renderExperts(){
     const ex = EXPERTS.find(x => x.k===state.xOpen) || EXPERTS[0], list = chatsLoad()[ex.k] || [];
     return `<div class="between"><button class="btn ghost" data-act="x-back">‹ All experts</button>${list.length ? `<button class="del" data-act="x-clear">Clear chat</button>` : ""}</div>
       <div class="card" style="flex-direction:row;align-items:center;gap:12px"><span style="font-size:32px">${ex.e}</span><div class="main"><b class="mid">${esc(ex.n)}</b><span class="tiny muted">${esc(ex.d)} · searches the web for current info</span></div></div>
-      ${!keyOk ? `<div class="notice"><span class="small">Add your Anthropic API key to start.</span><button class="btn" data-act="x-back">Set up</button></div>` : ""}
+      ${!keyOk ? `<div class="notice"><span class="small">No API key: your question opens in the Claude app (free with your Claude login), or search this expert's trusted sites. Add a key to get answers right here.</span></div>` : ""}
       ${expertKnowledgePanel(ex)}
       <div class="chatlog">
         ${list.length ? list.map((m, mi) => m.role==="user" ? `<div class="bub me">${esc(m.text)}</div>`
           : m.role==="error" ? `<div class="bub err">${esc(m.text)}</div>`
+          : m.role==="note" ? `<div class="tiny muted" style="align-self:center;text-align:center;max-width:90%">${esc(m.text)}</div>`
           : `<div class="bub ai">${mdLite(m.text)}${(m.sources||[]).length ? `<div class="srcs"><span class="tiny muted">Sources</span>${m.sources.map(s2 => `<a href="${esc(s2.url)}">🔗 ${esc(s2.title || s2.url)}</a>`).join("")}</div>` : ""}<div style="margin-top:6px"><button class="del" data-act="x-savekn" data-i="${mi}">📚 Save to knowledge</button></div></div>`).join("")
           : `<span class="small muted">Ask anything. Try one of these:</span><div class="presets">${ex.q.map((q,i) => `<button type="button" data-act="x-q" data-i="${i}">${esc(q)}</button>`).join("")}</div>`}
         ${state.xBusy ? `<div class="typing">${ex.e} Searching the web and thinking… this can take up to a minute.</div>` : ""}
       </div>
       <form class="card" id="x-form" autocomplete="off" style="gap:8px">
-        <textarea class="field" id="x-in" data-live="1" style="min-height:64px" placeholder="Type your question in Tamil or English…" ${state.xBusy || !keyOk ? "disabled" : ""}></textarea>
+        <textarea class="field" id="x-in" data-live="1" style="min-height:64px" placeholder="Type your question in Tamil or English…" ${state.xBusy ? "disabled" : ""}></textarea>
         ${ex.money ? `<label class="checkline" for="x-share"><input type="checkbox" id="x-share" data-live="1" ${state.xShare ? "checked" : ""}> Share my LifeOS money summary with this question</label>` : ""}
-        <button class="btn block" type="submit" ${state.xBusy || !keyOk ? "disabled" : ""}>${state.xBusy ? "Waiting for answer…" : "Ask " + esc(ex.n)}</button>
+        <button class="btn block" type="submit" ${state.xBusy ? "disabled" : ""}>${state.xBusy ? "Waiting for answer…" : keyOk ? "Ask " + esc(ex.n) : "💬 Ask in Claude app"}</button>
+        <div class="row" style="gap:8px">
+          ${keyOk ? `<button class="btn ghost" type="button" data-act="x-claude" style="flex:1">💬 Claude app</button>` : ""}
+          <button class="btn ghost" type="button" data-act="x-search" style="flex:1">🔎 Search trusted sites</button>
+        </div>
       </form>
       <span class="tiny muted">General guidance from AI, not a licensed professional's signed opinion. Never share passwords, OTPs or full card or Aadhaar numbers.</span>`;
   }
@@ -2121,7 +2163,8 @@ function renderExperts(){
       <h3>Experts</h3>
       <span class="small muted">Ask a CA, engineer, electrician, wealth manager and more. Each one searches the web for current, India-specific information and shows its sources, and puts your safety first.</span>
       ${keyOk ? `<div class="between"><span class="chip good">API key added</span><button class="del" data-act="x-key-remove">Remove key</button></div>`
-        : `<details class="winbox" id="x-keybox" open><summary>Set up (one time)</summary><div class="stack">
+        : `<div class="notice"><span class="small">Works without a key: open any expert, type your question and tap <b>Ask in Claude app</b> (uses your Claude login) or <b>Search trusted sites</b>. Add a key below only if you want answers inside LifeOS.</span></div>
+          <details class="winbox" id="x-keybox"><summary>Optional: answers inside LifeOS (API key)</summary><div class="stack">
           <ol class="small" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
             <li>Open <a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a>, sign in and add credits under Billing.</li>
             <li>Create an API key and copy it.</li>
@@ -2367,7 +2410,13 @@ document.addEventListener("click", e => {
   }
   if (act==="x-open"){ state.xOpen = b.dataset.k; render(); window.scrollTo(0,0); return; }
   if (act==="x-back"){ state.xOpen = null; render(); window.scrollTo(0,0); return; }
-  if (act==="x-q"){ const ex = EXPERTS.find(x => x.k===state.xOpen); if (ex) askExpert(ex.k, ex.q[Number(b.dataset.i)]); return; }
+  if (act==="x-q"){ const ex = EXPERTS.find(x => x.k===state.xOpen); if (ex){ const q = ex.q[Number(b.dataset.i)]; hasExpertKey() ? askExpert(ex.k, q) : askInClaude(ex, q); } return; }
+  if (act==="x-claude" || act==="x-search"){
+    const ex = EXPERTS.find(x => x.k===state.xOpen); if (!ex) return;
+    const q = valOf("x-in").trim(); if (!q){ toast("Type your question first"); return; }
+    const el = document.getElementById("x-in"); if (el) el.value = "";
+    act==="x-claude" ? askInClaude(ex, q) : searchTrusted(ex, q); return;
+  }
   if (act==="x-clear"){
     if (armed !== "x-clear"){ armed = "x-clear"; b.textContent = "Tap again to clear"; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; render(); }, 3000); return; }
     armed = null; const c = chatsLoad(); delete c[state.xOpen]; chatsSave(c); render(); return;
@@ -2723,6 +2772,7 @@ document.addEventListener("submit", e => {
   if (f.id==="x-form"){
     const t = valOf("x-in").trim(); if (!t || !state.xOpen) return;
     const el = document.getElementById("x-in"); if (el) el.value = "";
+    if (!hasExpertKey()){ const ex = EXPERTS.find(x => x.k===state.xOpen); if (ex) askInClaude(ex, t); return; }
     askExpert(state.xOpen, t); return;
   }
   if (f.id==="home-todo"){

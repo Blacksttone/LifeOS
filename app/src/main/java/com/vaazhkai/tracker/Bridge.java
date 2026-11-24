@@ -179,6 +179,27 @@ public class Bridge {
         activity.runOnUiThread(activity::requestNotificationPermission);
     }
 
+    /** Opens claude.ai (Claude app if installed) or a Google search; only https links to known hosts. */
+    @JavascriptInterface
+    public void openUrl(String url) {
+        android.net.Uri u = android.net.Uri.parse(url == null ? "" : url);
+        String h = u.getHost() == null ? "" : u.getHost();
+        if (!"https".equals(u.getScheme()) || !(h.equals("claude.ai") || h.equals("www.google.com"))) return;
+        activity.runOnUiThread(() -> {
+            try { activity.startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) {}
+        });
+    }
+
+    @JavascriptInterface
+    public void copyText(String text) {
+        activity.runOnUiThread(() -> {
+            try {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("LifeOS question", text));
+            } catch (Exception ignored) {}
+        });
+    }
+
     @JavascriptInterface
     public void share(String text, String subject) {
         activity.runOnUiThread(() -> {
