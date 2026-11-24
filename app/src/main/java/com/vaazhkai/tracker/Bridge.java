@@ -12,6 +12,38 @@ public class Bridge {
     @JavascriptInterface
     public boolean isApp() { return true; }
 
+    /* Experts (Claude with web search). The API key stays in a no-backup file on this phone. */
+    private java.io.File keyFile() { return new java.io.File(activity.getNoBackupFilesDir(), "expert_key"); }
+
+    private String readKey() {
+        try { return new String(java.nio.file.Files.readAllBytes(keyFile().toPath()), java.nio.charset.StandardCharsets.UTF_8).trim(); }
+        catch (Exception e) { return ""; }
+    }
+
+    @JavascriptInterface
+    public boolean hasExpertKey() { return !readKey().isEmpty(); }
+
+    @JavascriptInterface
+    public boolean setExpertKey(String key) {
+        try {
+            String k = key == null ? "" : key.trim();
+            if (k.isEmpty()) { keyFile().delete(); return true; }
+            java.nio.file.Files.write(keyFile().toPath(), k.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    @JavascriptInterface
+    public void askExpert(final String id, final String system, final String history) {
+        final String key = readKey();
+        new Thread(() -> {
+            String result = key.isEmpty()
+                    ? "{\"ok\":false,\"error\":\"Add your Anthropic API key first.\"}"
+                    : ExpertsApi.ask(key, system, history);
+            activity.runJs("window.__expertDone && window.__expertDone(" + org.json.JSONObject.quote(id) + "," + org.json.JSONObject.quote(result) + ")");
+        }).start();
+    }
+
     /* Full-screen reminders */
     @JavascriptInterface
     public String takeDoneReminders() { return Alarms.takeDone(activity); }
