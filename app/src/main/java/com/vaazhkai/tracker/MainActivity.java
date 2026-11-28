@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
 
         ReminderScheduler.scheduleAll(this);
         try { Geo.registerAll(this, null); } catch (Exception ignored) {}
+        if (Steps.allowed(this)) Steps.scheduleMidnight(this);
     }
 
     /** Back: let the page close an open screen first (task page, chat); otherwise leave the app. */
@@ -151,6 +152,10 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (web != null) web.evaluateJavascript("window.__notifChanged && window.__notifChanged()", null);
+        if (requestCode == 7) {
+            if (Steps.allowed(this)) Steps.scheduleMidnight(this);
+            if (web != null) web.evaluateJavascript("window.__stepsChanged && window.__stepsChanged()", null);
+        }
         if (requestCode == 2 || requestCode == 3) {
             try { Geo.registerAll(this, null); } catch (Exception ignored) {}
             if (web != null) web.evaluateJavascript("window.__locChanged && window.__locChanged()", null);
@@ -162,6 +167,7 @@ public class MainActivity extends Activity {
         super.onResume();
         // Back from Settings: the location permission may have changed.
         if (web != null) web.evaluateJavascript("window.__locChanged && window.__locChanged()", null);
+        if (web != null) web.evaluateJavascript("window.__stepsChanged && window.__stepsChanged()", null);
     }
 
     @Override

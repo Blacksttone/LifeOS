@@ -10,5 +10,6 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         ReminderScheduler.scheduleAll(context);
         try { Geo.registerAll(context, null); } catch (Exception ignored) {}
+        Steps.scheduleMidnight(context);
     }
 }

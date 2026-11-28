@@ -37,7 +37,7 @@ button{cursor:pointer}
 .iconbtn svg{width:20px;height:20px;stroke:var(--ink)}
 .iconbtn .badge{position:absolute;top:6px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--blue)}
 
-main{max-width:760px;margin:0 auto;padding:16px 16px calc(var(--nav-h) + 28px);display:flex;flex-direction:column;gap:16px}
+main{max-width:760px;margin:0 auto;padding:16px 16px calc(var(--nav-h) + 92px);display:flex;flex-direction:column;gap:16px}
 
 /* bottom nav */
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line)}
@@ -131,6 +131,28 @@ li.done .title{color:var(--faint);text-decoration:line-through}
 .monthnav button:disabled{opacity:.35}
 
 .stepper{display:flex;align-items:center;gap:8px}
+.wglass{flex:none;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.wglass svg{display:block;overflow:visible}
+.wglass .wlevel{animation:wrise 1.1s cubic-bezier(.3,.8,.3,1) both}
+@keyframes wrise{from{transform:translateY(var(--from))}to{transform:translateY(var(--to))}}
+.wglass .wave{animation:wmove 2.4s linear infinite}
+.wglass .wave2{animation:wmove 3.6s linear infinite reverse;opacity:.55}
+@keyframes wmove{from{transform:translateX(0)}to{transform:translateX(-100px)}}
+.wglass .bub{fill:#fff;opacity:.6;animation:wbub 2.8s ease-in infinite}
+@keyframes wbub{0%{transform:translateY(0);opacity:0}20%{opacity:.7}100%{transform:translateY(-70px);opacity:0}}
+.wglass:active svg{transform:scale(.96)}
+@media (prefers-reduced-motion:reduce){.wglass .wlevel,.wglass .wave,.wglass .wave2,.wglass .bub{animation:none}.wglass .wlevel{transform:translateY(var(--to))}}
+.stepsbig{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.stepstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stepstats>div{background:var(--blue-tint);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column}
+.stepstats b{font-size:17px}
+.fab{position:fixed;right:max(16px, calc((100vw - 760px)/2 + 16px));bottom:calc(var(--nav-h) + 16px);z-index:7;width:58px;height:58px;border-radius:18px;border:0;background:var(--blue);color:#fff;font-size:32px;line-height:1;display:grid;place-items:center;box-shadow:0 8px 22px rgba(29,78,216,.35);cursor:pointer;transition:transform .2s}
+.fab.open{transform:rotate(45deg)}
+.fabmenu{position:fixed;right:max(16px, calc((100vw - 760px)/2 + 16px));bottom:calc(var(--nav-h) + 86px);z-index:7;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fabmenu button{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font:inherit;font-weight:600;color:var(--ink);box-shadow:0 6px 16px rgba(15,23,42,.12);cursor:pointer;animation:fabin .18s ease-out both}
+.fabmenu button span{font-size:20px}
+@keyframes fabin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.fabshade{position:fixed;inset:0;z-index:6;background:rgba(15,23,42,.25)}
 .stepper button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:20px;line-height:1;color:var(--blue)}
 .stepper .val{min-width:56px;text-align:center}
 .metric{display:flex;flex-direction:column;gap:8px}
@@ -800,7 +822,7 @@ function render(){
   state.keepLive = false;
 
   const views = {home:renderHome, plan:renderPlan, goals:renderGoals, money:renderMoney, health:renderHealth, more:renderMore};
-  main.innerHTML = (views[state.tab] || renderHome)();
+  main.innerHTML = (views[state.tab] || renderHome)() + fabHtml();
 
   for (const [id,v] of Object.entries(keep)){ const el = main.querySelector("#"+CSS.escape(id)); if (el && v !== undefined) el.value = v; }
   for (const id of openBoxes){ const el = main.querySelector("#"+CSS.escape(id)); if (el) el.open = true; }
@@ -1039,8 +1061,8 @@ function renderHome(){
     </button>
     <button class="card tap" data-act="go" data-tab="health">
       <span class="label">Water today</span>
-      <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal} glasses</span></span>
-      ${bar((h.water||0)/s.waterGoal*100, (h.water||0)>=s.waterGoal ? "good" : "")}
+      <div class="row" style="gap:10px">${waterGlass(h.water||0, s.waterGoal, 40, "home").replace('<button type="button" class="wglass" data-act="water" data-d="1"', '<span class="wglass"').replace("</svg></button>", "</svg></span>")}
+      <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal}</span></span></div>
     </button>
     <button class="card tap" data-act="go" data-tab="health">
       <span class="label">Sleep · Steps</span>
@@ -1182,12 +1204,31 @@ function tpSave(field, value){
   const el = document.getElementById("tp-saved"); if (el) el.textContent = "Saved ✓";
 }
 window.__back = () => {
+  if (state.fab){ state.fab = false; render(); return true; }
   if (state.taskPage){ state.taskPage = null; render(); return true; }
   if (state.editing){ state.editing = null; render(); return true; }
   if (state.xOpen){ state.xOpen = null; render(); return true; }
   if (state.tab !== "home"){ go("home"); return true; }
   return false;
 };
+
+/* Floating + button: quick add from anywhere. */
+const FAB_ITEMS = [["todo","✅","To-do task"],["expense","💸","Expense"],["reminder","⏰","Reminder"],["water","💧","+1 glass of water"],["journal","📓","Journal"],["goal","🎯","Goal"]];
+function fabHtml(){
+  if (state.taskPage || (state.tab==="more" && state.more==="experts" && state.xOpen)) return "";
+  return (state.fab ? `<div class="fabshade" data-act="fab"></div><div class="fabmenu" role="menu">${FAB_ITEMS.map(([k,e,l],i) => `<button type="button" role="menuitem" data-act="fab-go" data-k="${k}" style="animation-delay:${(FAB_ITEMS.length-1-i)*30}ms">${l}<span>${e}</span></button>`).join("")}</div>` : "")
+    + `<button type="button" class="fab ${state.fab ? "open" : ""}" data-act="fab" aria-label="${state.fab ? "Close quick add" : "Quick add"}" aria-expanded="${!!state.fab}">+</button>`;
+}
+function fabGo(k){
+  state.fab = false;
+  const focus = id => setTimeout(() => { const el = document.getElementById(id); if (el){ el.scrollIntoView({block:"center"}); el.focus(); } }, 60);
+  if (k==="todo"){ go("plan", {plan:"todo"}); focus("new-title"); }
+  else if (k==="expense"){ state.txType = "expense"; state.month = monthKey(state.now); go("money", {money:"spend"}); focus("tx-amt"); }
+  else if (k==="reminder"){ go("more", {more:"reminders"}); focus("r-title"); }
+  else if (k==="journal"){ state.jdate = null; go("more", {more:"journal"}); focus("j-good"); }
+  else if (k==="goal"){ go("goals", {goals:"list"}); focus("g-title"); }
+  else if (k==="water"){ const kk = dayKey(state.now), nv = (Number(healthDay(kk).water)||0) + 1; setHealth(kk, {water:nv}); toast(`💧 ${nv} glass${nv===1?"":"es"} today`); }
+}
 
 /* PLAN */
 function renderPlan(){
@@ -1850,6 +1891,66 @@ function wealthRow(id, a, isL){
 }
 
 /* HEALTH */
+/* Water glass that fills up (animated from the last level shown). */
+function waterGlass(cur, goal, w, uid){
+  const pct = Math.max(0, Math.min(1, goal ? cur/goal : 0));
+  const top = 14, bottom = 124, lvl = y => bottom - y*(bottom - top);
+  const prev = state.waterShown && state.waterShown[uid] !== undefined ? state.waterShown[uid] : 0;
+  state.waterShown = {...(state.waterShown||{}), [uid]: pct};
+  const waveAlt = (y0, amp) => { let d = `M-100 ${y0}`; for (let i = 0, x = -100; x < 200; x += 25, i++) d += ` q12.5 ${i%2 ? amp : -amp} 25 0`; return d + ` V200 H-100 Z`; };
+  const full = pct >= 1, col = full ? "#16a34a" : "#2563eb", col2 = full ? "#4ade80" : "#60a5fa";
+  return `<button type="button" class="wglass" data-act="water" data-d="1" aria-label="Add a glass of water (${cur} of ${goal})">
+    <svg width="${w}" height="${Math.round(w*1.3)}" viewBox="0 0 100 130" aria-hidden="true">
+      <defs><clipPath id="wc-${uid}"><path d="M12 10 H88 L79 121 Q78 126 73 126 H27 Q22 126 21 121 Z"/></clipPath></defs>
+      <path d="M12 10 H88 L79 121 Q78 126 73 126 H27 Q22 126 21 121 Z" fill="#eef4ff"/>
+      <g clip-path="url(#wc-${uid})">
+        <g class="wlevel" style="--from:${lvl(prev).toFixed(1)}px;--to:${lvl(pct).toFixed(1)}px">
+          <path class="wave2" d="${waveAlt(0, 4)}" fill="${col2}"/>
+          <path class="wave" d="${waveAlt(2, 5)}" fill="${col}"/>
+          ${pct > 0.05 ? `<circle class="bub" cx="35" cy="40" r="2.5"/><circle class="bub" cx="62" cy="60" r="2" style="animation-delay:1.1s"/><circle class="bub" cx="50" cy="30" r="1.6" style="animation-delay:1.9s"/>` : ""}
+        </g>
+      </g>
+      <path d="M12 10 H88 L79 121 Q78 126 73 126 H27 Q22 126 21 121 Z" fill="none" stroke="#93b4f5" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M22 20 L28 110" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".5"/>
+      <text x="50" y="80" text-anchor="middle" font-size="22" font-weight="800" fill="${pct > 0.45 ? "#fff" : "#1e40af"}" font-family="inherit">${Math.round(pct*100)}%</text>
+    </svg></button>`;
+}
+/* Steps from the phone's step counter, plus distance and calories. */
+const stepsStatus = () => { try { return bridge && typeof bridge.stepsStatus === "function" ? bridge.stepsStatus() : "none"; } catch(e){ return "none"; } };
+function readSteps(){ try { if (stepsStatus()==="on") bridge.readSteps(); } catch(e){} }
+window.__steps = (n, prev) => {
+  const k = dayKey(new Date());
+  if (prev && prev.day && prev.day !== k && prev.steps > (Number(healthDay(prev.day).steps)||0)) { const cur = healthDay(prev.day); state.items.set("h-"+prev.day, {...cur, steps: prev.steps, stepsAuto:true, kind:"health", date:prev.day}); persist(); }
+  const cur = Number(healthDay(k).steps)||0;
+  if (n > cur) setHealth(k, {steps:n, stepsAuto:true}); else if (state.tab==="health" || state.tab==="home") render();
+};
+window.__stepsChanged = () => { if (stepsStatus()==="on") readSteps(); if (state.tab==="health") render(); };
+function stepMath(steps){
+  const s = settings(), h = Number(s.heightCm) || 0, wt = Number(s.weightKg) || 0;
+  const stride = h ? h * 0.415 / 100 : 0.76; // metres per step
+  const km = steps * stride / 1000;
+  const kcal = steps * (wt ? wt * 0.00057 : 0.04); // ~0.57 kcal per kg per 1000 steps
+  return {km, kcal, mins: Math.round(steps / 100)};
+}
+function stepsCard(h, s){
+  const st = stepsStatus(), steps = Number(h.steps)||0, m = stepMath(steps), goal = s.stepsGoal || 8000;
+  return `<div class="card" style="gap:10px">
+    <div class="between"><span class="label">👟 Steps today</span>
+      ${st==="on" ? `<button class="del" data-act="steps-refresh">↻ Refresh</button>` : ""}</div>
+    <div class="between"><div class="stepsbig"><span class="big">${steps.toLocaleString("en-IN")}</span><span class="unit">/ ${Number(goal).toLocaleString("en-IN")}</span></div>
+      <span class="chip ${steps>=goal?"good":""}">${steps>=goal ? "Goal reached 🎉" : `${(goal-steps).toLocaleString("en-IN")} to go`}</span></div>
+    ${bar(steps/goal*100, steps>=goal?"good":"")}
+    <div class="stepstats">
+      <div><b>${m.km.toFixed(2)}</b><span class="tiny muted">km walked</span></div>
+      <div><b>${Math.round(m.kcal)}</b><span class="tiny muted">kcal burned</span></div>
+      <div><b>${m.mins}</b><span class="tiny muted">active min</span></div></div>
+    ${st==="on" ? `<span class="tiny muted">📱 Counted by your phone. Keep the phone with you; it updates when you open LifeOS.</span>`
+      : st==="off" ? `<div class="notice"><span class="small">Let LifeOS count your steps automatically with the phone's step sensor.</span><button class="btn" data-act="steps-on">Turn on</button></div>`
+      : ""}
+    ${st!=="on" ? `<label class="flabel" for="hm-steps">Enter steps<input class="field" id="hm-steps" data-h="steps" inputmode="numeric" placeholder="0" value="${h.steps??""}"></label>` : ""}
+    <span class="tiny muted">${Number(s.heightCm) ? `Using your height ${s.heightCm} cm${Number(s.weightKg) ? ` and weight ${s.weightKg} kg` : ""}.` : "Add your height and weight in Daily goals below for exact km and kcal."}</span>
+  </div>`;
+}
 function renderHealth(){
   const s = settings(), k = dayKey(state.now), h = healthDay(k);
   const metrics = {water:["Water","glasses",s.waterGoal], sleep:["Sleep","hours",s.sleepGoal], steps:["Steps","steps",s.stepsGoal], workout:["Workout","min",s.workoutGoal], weight:["Weight","kg",0]};
@@ -1864,15 +1965,18 @@ function renderHealth(){
 
   return `<div class="card">
     <div class="between"><span class="label">Water today</span><span class="chip ${(h.water||0)>=s.waterGoal?"good":""}">${(h.water||0)>=s.waterGoal?"Goal reached":`${s.waterGoal-(h.water||0)} more to go`}</span></div>
-    <div class="between">
-      <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal} glasses</span></span>
-      <div class="stepper"><button data-act="water" data-d="-1" aria-label="Remove a glass">−</button><button data-act="water" data-d="1" aria-label="Add a glass">+</button></div>
+    <div class="row" style="gap:16px">
+      ${waterGlass(h.water||0, s.waterGoal, 92, "health")}
+      <div class="main" style="gap:10px">
+        <span class="big">${h.water||0}<span class="unit"> / ${s.waterGoal} glasses</span></span>
+        <span class="tiny muted">${((h.water||0)*0.25).toFixed(2).replace(/\.?0+$/,"")} L of ${(s.waterGoal*0.25).toFixed(2).replace(/\.?0+$/,"")} L · tap the glass to add one</span>
+        <div class="stepper"><button data-act="water" data-d="-1" aria-label="Remove a glass">−</button><button data-act="water" data-d="1" aria-label="Add a glass">+</button></div>
+      </div>
     </div>
-    ${bar((h.water||0)/s.waterGoal*100, (h.water||0)>=s.waterGoal?"good":"")}
   </div>
+  ${stepsCard(h, s)}
   <div class="grid2">
     ${metricInput("sleep","Sleep","hours",s.sleepGoal)}
-    ${metricInput("steps","Steps","steps",s.stepsGoal)}
     ${metricInput("workout","Workout","min",s.workoutGoal)}
     ${metricInput("weight","Weight","kg",0)}
   </div>
@@ -1892,6 +1996,8 @@ function renderHealth(){
         <label class="flabel" for="g-sleep">Sleep <span>hours</span><input class="field" id="g-sleep" inputmode="decimal" value="${s.sleepGoal}"></label>
         <label class="flabel" for="g-steps">Steps <span>per day</span><input class="field" id="g-steps" inputmode="numeric" value="${s.stepsGoal}"></label>
         <label class="flabel" for="g-workout">Workout <span>minutes</span><input class="field" id="g-workout" inputmode="numeric" value="${s.workoutGoal}"></label>
+        <label class="flabel" for="g-height">Height <span>cm, for steps km</span><input class="field" id="g-height" inputmode="numeric" placeholder="e.g. 170" value="${s.heightCm||""}"></label>
+        <label class="flabel" for="g-wkg">Weight <span>kg, for kcal</span><input class="field" id="g-wkg" inputmode="decimal" placeholder="e.g. 70" value="${s.weightKg||""}"></label>
       </div>
       <button class="btn ghost" type="submit">Save goals</button>
     </form>
@@ -2449,7 +2555,7 @@ function renderBackup(){
 /* ---------- actions ---------- */
 let armed = null, armTimer = null;
 function go(tab, sub){
-  state.tab = tab; state.taskPage = null;
+  state.tab = tab; state.taskPage = null; state.fab = false;
   if (sub){ for (const [k,v] of Object.entries(sub)) if (v) state[k] = v; }
   saveView(); render(); window.scrollTo(0,0);
 }
@@ -2591,6 +2697,10 @@ document.addEventListener("click", e => {
     updateItem(id, {log});
   }
   if (act==="todo" && it) updateItem(id, {done:!it.done, doneAt: it.done ? null : Date.now()});
+  if (act==="fab"){ state.fab = !state.fab; render(); return; }
+  if (act==="fab-go"){ fabGo(b.dataset.k); return; }
+  if (act==="steps-on"){ try { bridge.requestSteps(); } catch(_){} return; }
+  if (act==="steps-refresh"){ readSteps(); toast("Updating steps…"); return; }
   if (act==="tp-open"){ state.taskPage = id; state.editing = null; render(); window.scrollTo(0, 0); return; }
   if (act==="tp-back"){ state.taskPage = null; render(); return; }
   if (act==="tp-sub-del" && it && Array.isArray(it.subs)){ const subs = it.subs.filter((_,j) => j!==Number(b.dataset.i)); updateItem(id, subs.length ? {subs} : {subs: undefined}); return; }
@@ -2906,6 +3016,9 @@ document.addEventListener("submit", e => {
     const g = k => num(val(k));
     const patch = {waterGoal:g("g-water"), sleepGoal:g("g-sleep"), stepsGoal:g("g-steps"), workoutGoal:g("g-workout")};
     if (Object.values(patch).some(v => !isFinite(v) || v <= 0)){ toast("Each goal needs a number above zero."); return; }
+    const ht = val("g-height").trim() ? num(val("g-height")) : 0, wk = val("g-wkg").trim() ? num(val("g-wkg")) : 0;
+    if (!isFinite(ht) || ht < 0 || ht > 250 || !isFinite(wk) || wk < 0 || wk > 300){ toast("Check height (cm) and weight (kg)."); return; }
+    patch.heightCm = ht || undefined; patch.weightKg = wk || undefined;
     saveSettings(patch); toast("Goals saved");
   }
   if (f.id==="xk-form"){
@@ -2999,7 +3112,8 @@ render();
 checkUpdate(false);
 refreshPrices(false);
 setTimeout(autoBackup, 3000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden){ maybeCheckUpdate(); applyNativeDone(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden){ maybeCheckUpdate(); applyNativeDone(); readSteps(); } });
+readSteps();
 applyNativeDone();
 })();
 </script>

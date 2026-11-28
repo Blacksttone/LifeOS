@@ -200,6 +200,27 @@ public class Bridge {
         });
     }
 
+    /* Steps from the phone's step counter. */
+    @JavascriptInterface
+    public String stepsStatus() {
+        if (!Steps.supported(activity)) return "none";
+        return Steps.allowed(activity) ? "on" : "off";
+    }
+
+    @JavascriptInterface
+    public void requestSteps() {
+        activity.runOnUiThread(() -> {
+            if (android.os.Build.VERSION.SDK_INT >= 29) activity.requestPermissions(new String[]{android.Manifest.permission.ACTIVITY_RECOGNITION}, 7);
+        });
+    }
+
+    /** Takes a fresh reading, then calls window.__steps(today, prevJson). */
+    @JavascriptInterface
+    public void readSteps() {
+        activity.runOnUiThread(() -> Steps.readOnce(activity, () ->
+                activity.runJs("window.__steps && window.__steps(" + Steps.todaySteps(activity) + "," + Steps.prevJson(activity) + ")")));
+    }
+
     @JavascriptInterface
     public void share(String text, String subject) {
         activity.runOnUiThread(() -> {
