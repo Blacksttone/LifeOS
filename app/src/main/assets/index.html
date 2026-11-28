@@ -1192,6 +1192,32 @@ function renderTaskPage(id, t){
     </div>
     <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button><button class="del" data-act="tp-back">Close</button></div>`;
 }
+/* New task page (opened from +): 1. task name, 2. tasks inside with tick boxes. */
+function renderNewTask(){
+  return `<form id="add-form" autocomplete="off" class="stack" style="gap:16px">
+    <div class="between"><button type="button" class="btn ghost" data-act="nt-close">‹ Back</button><button class="btn" type="submit">Save task</button></div>
+    <div class="card" style="gap:10px">
+      <span class="label">1 · Task name</span>
+      <input class="field" id="new-title" maxlength="140" placeholder="e.g. Office purchase" aria-label="Task name" style="font-size:19px;font-weight:700" enterkeyhint="next">
+      <select class="field" id="new-area" aria-label="Category"><option value="">Category: auto</option>${areaOptions(state.planArea)}</select>
+    </div>
+    <div class="card" style="gap:10px">
+      <span class="label">2 · Tasks inside</span>
+      <span class="tiny muted">Add as many as you need. Each gets its own tick box. Press Enter for the next one.</span>
+      ${subsEditor("nw")}
+    </div>
+    <details class="winbox" id="nw-more"><summary>📝 Add a note</summary><div class="stack">
+      <textarea class="field" id="new-note" style="min-height:90px" maxlength="2000" placeholder="Shop name, price, phone number, anything to remember" aria-label="Note"></textarea></div></details>
+    <details class="winbox" id="nw-remind"><summary>⏰ Add a reminder time</summary><div class="stack">${remindFields("nr", {kind:"todo"}, false)}</div></details>
+    <button class="btn block" type="submit">Save task</button>
+  </form>`;
+}
+function openNewTask(){
+  state.subDraft = {...(state.subDraft||{}), nw: null};
+  state.plan = "todo"; state.tab = "plan"; state.taskPage = null; state.editing = null; state.fab = false; state.newTask = true;
+  saveView(); render(); window.scrollTo(0, 0);
+  setTimeout(() => { const el = document.getElementById("new-title"); if (el) el.focus(); }, 60);
+}
 let tpTimer = null;
 function tpSave(field, value){
   const id = state.taskPage, it = id && state.items.get(id); if (!it) return;
@@ -1205,6 +1231,7 @@ function tpSave(field, value){
 }
 window.__back = () => {
   if (state.fab){ state.fab = false; render(); return true; }
+  if (state.newTask){ state.newTask = false; render(); return true; }
   if (state.taskPage){ state.taskPage = null; render(); return true; }
   if (state.editing){ state.editing = null; render(); return true; }
   if (state.xOpen){ state.xOpen = null; render(); return true; }
@@ -1215,14 +1242,14 @@ window.__back = () => {
 /* Floating + button: quick add from anywhere. */
 const FAB_ITEMS = [["todo","✅","To-do task"],["expense","💸","Expense"],["reminder","⏰","Reminder"],["water","💧","+1 glass of water"],["journal","📓","Journal"],["goal","🎯","Goal"]];
 function fabHtml(){
-  if (state.taskPage || (state.tab==="more" && state.more==="experts" && state.xOpen)) return "";
+  if (state.taskPage || state.newTask || (state.tab==="more" && state.more==="experts" && state.xOpen)) return "";
   return (state.fab ? `<div class="fabshade" data-act="fab"></div><div class="fabmenu" role="menu">${FAB_ITEMS.map(([k,e,l],i) => `<button type="button" role="menuitem" data-act="fab-go" data-k="${k}" style="animation-delay:${(FAB_ITEMS.length-1-i)*30}ms">${l}<span>${e}</span></button>`).join("")}</div>` : "")
     + `<button type="button" class="fab ${state.fab ? "open" : ""}" data-act="fab" aria-label="${state.fab ? "Close quick add" : "Quick add"}" aria-expanded="${!!state.fab}">+</button>`;
 }
 function fabGo(k){
   state.fab = false;
   const focus = id => setTimeout(() => { const el = document.getElementById(id); if (el){ el.scrollIntoView({block:"center"}); el.focus(); } }, 60);
-  if (k==="todo"){ go("plan", {plan:"todo"}); focus("new-title"); }
+  if (k==="todo"){ openNewTask(); }
   else if (k==="expense"){ state.txType = "expense"; state.month = monthKey(state.now); go("money", {money:"spend"}); focus("tx-amt"); }
   else if (k==="reminder"){ go("more", {more:"reminders"}); focus("r-title"); }
   else if (k==="journal"){ state.jdate = null; go("more", {more:"journal"}); focus("j-good"); }
@@ -1232,6 +1259,7 @@ function fabGo(k){
 
 /* PLAN */
 function renderPlan(){
+  if (state.newTask && state.plan==="todo") return renderNewTask();
   if (state.taskPage){ const t = state.items.get(state.taskPage); if (t && t.kind==="todo") return renderTaskPage(state.taskPage, t); state.taskPage = null; }
   const kd = planOf(state.plan) || PLAN[0], d = state.now, list = byKind(kd.k);
   let head = "";
@@ -1267,6 +1295,7 @@ function renderPlan(){
           <label class="flabel" for="new-note">Note<textarea class="field" id="new-note" style="min-height:60px" maxlength="2000" placeholder="Shop name, price, phone number, anything to remember"></textarea></label></div></details>
         <details class="winbox" id="nw-remind"><summary>⏰ Add a reminder time</summary><div class="stack">${remindFields("nr", {kind:kd.k}, false)}</div></details></form>`;
 
+  const form2 = kd.k==="todo" ? `<button class="card tap" data-act="nt-open" style="flex-direction:row;align-items:center;gap:12px"><span style="font-size:26px;color:var(--blue);font-weight:700">+</span><span class="main"><b>New task</b><span class="tiny muted">Name it, then add tasks inside with tick boxes</span></span></button>` : form;
   const anyTasks = [...state.items.values()].some(v => v && PLAN.some(p=>p.k===v.kind));
   const withEd = (id, it, row) => row + (state.editing===id ? editorRow(id,it) : "");
   let body;
@@ -1289,7 +1318,7 @@ function renderPlan(){
       + (done.length ? `<div class="sub">Done · ${done.length}</div><ul class="list">${rows(done)}</ul>` : "");
   } else body = `<ul class="list">${list.map(([id,it]) => withEd(id, it, recurringRow(id,it,kd))).join("")}</ul>`;
 
-  return seg(PLAN.map(p=>[p.k,p.label]), kd.k, "plan") + head + form + body + planMoney(kd.k);
+  return seg(PLAN.map(p=>[p.k,p.label]), kd.k, "plan") + head + form2 + body + planMoney(kd.k);
 }
 function recurringRow(id, it, kd){
   const done = isDone(it, kd, state.now);
@@ -1380,7 +1409,7 @@ function subDraft(p){ state.subDraft = state.subDraft || {}; if (!state.subDraft
 function subsEditor(p){
   const rows = subDraft(p);
   return `<div class="sdlist" id="${p}-sdlist">${rows.map((x,i) => sdRow(p, i, x)).join("")}
-    <button type="button" class="btn ghost" data-act="sd-add" data-p="${p}">+ Add sub-task</button></div>`;
+    <button type="button" class="btn ghost" data-act="sd-add" data-p="${p}">+ Add task</button></div>`;
 }
 const sdRow = (p, i, x) => `<div class="sdrow">
       <input type="checkbox" id="${p}-sdc-${i}" data-live="1" data-sdc="${p}" data-i="${i}" ${x.d ? "checked" : ""} aria-label="Done">
@@ -2555,7 +2584,7 @@ function renderBackup(){
 /* ---------- actions ---------- */
 let armed = null, armTimer = null;
 function go(tab, sub){
-  state.tab = tab; state.taskPage = null; state.fab = false;
+  state.tab = tab; state.taskPage = null; state.fab = false; state.newTask = false;
   if (sub){ for (const [k,v] of Object.entries(sub)) if (v) state[k] = v; }
   saveView(); render(); window.scrollTo(0,0);
 }
@@ -2563,7 +2592,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id, it = id ? state.items.get(id) : null;
   if (act==="go"){ go(b.dataset.tab, {plan:b.dataset.plan, money:b.dataset.money, more:b.dataset.more, goals:b.dataset.goals}); return; }
-  if (act==="plan" || act==="money" || act==="more" || act==="goals"){ state[act] = b.dataset.k; saveView(); render(); if (act==="money" && b.dataset.k==="wealth") refreshPrices(false); return; }
+  if (act==="plan" || act==="money" || act==="more" || act==="goals"){ state[act] = b.dataset.k; state.newTask = false; state.taskPage = null; saveView(); render(); if (act==="money" && b.dataset.k==="wealth") refreshPrices(false); return; }
   if (act==="area"){ state.area = b.dataset.k; render(); return; }
   if (act==="gmode"){ const t = document.getElementById("g-title"); state.goalTitle = t ? t.value : ""; state.goalMode = b.dataset.k; render(); return; }
   if (act==="area-goal"){ state.goalArea = b.dataset.k; state.goalMode = b.dataset.k==="wealth" ? "money" : "progress"; state.goalTitle = ""; go("goals", {goals:"list"}); setTimeout(()=>{ const t = document.getElementById("g-title"); t && t.focus(); }, 50); return; }
@@ -2697,7 +2726,9 @@ document.addEventListener("click", e => {
     updateItem(id, {log});
   }
   if (act==="todo" && it) updateItem(id, {done:!it.done, doneAt: it.done ? null : Date.now()});
-  if (act==="fab"){ state.fab = !state.fab; render(); return; }
+  if (act==="fab"){ if (state.tab==="plan" && state.plan==="todo" && !state.fab){ openNewTask(); return; } state.fab = !state.fab; render(); return; }
+  if (act==="nt-open"){ openNewTask(); return; }
+  if (act==="nt-close"){ state.newTask = false; state.subDraft.nw = null; render(); return; }
   if (act==="fab-go"){ fabGo(b.dataset.k); return; }
   if (act==="steps-on"){ try { bridge.requestSteps(); } catch(_){} return; }
   if (act==="steps-refresh"){ readSteps(); toast("Updating steps…"); return; }
@@ -2921,7 +2952,7 @@ document.addEventListener("submit", e => {
     return;
   }
   if (f.id==="add-form"){
-    const title = val("new-title").trim(); if (!title) return;
+    const title = val("new-title").trim(); if (!title){ if (state.newTask){ toast("Give the task a name first"); const el = document.getElementById("new-title"); if (el) el.focus(); } return; }
     const kind = state.plan, data = {kind, title, area: val("new-area") || guessArea(title), created: Date.now()};
     if (kind==="yearly"){
       const r = readPeriod("nw"); if (r.err){ toast(r.err); return; }
@@ -2936,7 +2967,7 @@ document.addEventListener("submit", e => {
       return;
     }
     if (planOf(kind).period) data.log = {};
-    if (kind==="todo") data.done = false;
+    if (kind==="todo"){ data.done = false; state.newTask = false; }
     const note = val("new-note").trim(); if (note) data.note = note.slice(0, 2000);
     if (kind==="todo"){ const subs = readSubs("nw"); if (subs.length) data.subs = subs; state.subDraft.nw = null; }
     const nid = newId();
