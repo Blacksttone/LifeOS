@@ -214,6 +214,11 @@ ul.list li.wrap{flex-wrap:wrap}
 .subadd{display:flex;gap:6px;margin-top:4px}
 .subadd .field{padding:6px 10px;font-size:14px;min-height:0}
 .acard{padding:0;overflow:hidden;gap:0}
+.sdlist{display:flex;flex-direction:column;gap:6px}
+.sdrow{display:flex;align-items:center;gap:8px}
+.sdrow input[type=checkbox]{flex:none;width:22px;height:22px;accent-color:var(--blue)}
+.sdrow .field{flex:1;min-width:0;padding:8px 10px}
+.sdlist .btn.ghost{align-self:flex-start}
 .acard>.between{padding:10px 14px;border-bottom:1px solid var(--line)}
 .daysrow{flex-basis:100%;padding-left:70px;margin-top:-2px}
 .checkline{display:flex;align-items:center;gap:10px;font-size:14px}
@@ -1124,7 +1129,7 @@ function editorRow(id, it){
   return `<li class="editor">
     <label class="flabel" for="ed-title">Task<input class="field" id="ed-title" data-live="1" maxlength="140" value="${esc(it.title)}"></label>
     <label class="flabel" for="ed-area">Life area<select class="field" id="ed-area" data-live="1">${areaOptions(itemArea(it))}</select></label>
-    ${it.kind==="todo" ? `<label class="flabel" for="ed-subs">Sub-tasks <span>One per line. Ticks are kept for lines you don't change.</span><textarea class="field" id="ed-subs" data-live="1" style="min-height:90px" placeholder="A4 sheet 2 ream&#10;Salary cover 300 nos">${esc(subsText(it))}</textarea></label>` : ""}
+    ${it.kind==="todo" ? `<div class="flabel">Sub-tasks <span>Tick what's done. Tap + to add more.</span></div>${subsEditor("ed")}` : ""}
     <label class="flabel" for="ed-note">Note<textarea class="field" id="ed-note" data-live="1" style="min-height:60px" maxlength="2000" placeholder="Shop name, price, phone number, anything to remember">${esc(it.note||"")}</textarea></label>
     ${it.kind==="yearly" ? `<span class="flabel">Period <span>Finish the task within these months.</span></span>${periodInputs("ed", it.period, true)}
       ${moneyFields("ed", it, true)}` : ""}
@@ -1166,7 +1171,7 @@ function renderPlan(){
         <select class="field" style="flex:0 1 130px" id="new-area" aria-label="Life area"><option value="">Area: auto</option>${areaOptions(state.planArea)}</select>
         <button class="btn" type="submit">Add</button>
         <details class="winbox" id="nw-more"><summary>📝 ${kd.k==="todo" ? "Add sub-tasks & a note" : "Add a note"}</summary><div class="stack">
-          ${kd.k==="todo" ? `<label class="flabel" for="new-subs">Sub-tasks <span>One per line</span><textarea class="field" id="new-subs" style="min-height:90px" placeholder="e.g. task: Office purchase&#10;A4 sheet 2 ream&#10;Salary cover 300 nos&#10;Low rate oil 5 ltr"></textarea></label>` : ""}
+          ${kd.k==="todo" ? `<div class="flabel">Sub-tasks <span>Each one gets its own tick box</span></div>${subsEditor("nw")}` : ""}
           <label class="flabel" for="new-note">Note<textarea class="field" id="new-note" style="min-height:60px" maxlength="2000" placeholder="Shop name, price, phone number, anything to remember"></textarea></label></div></details>
         <details class="winbox" id="nw-remind"><summary>⏰ Add a reminder time</summary><div class="stack">${remindFields("nr", {kind:kd.k}, false)}</div></details></form>`;
 
@@ -1278,6 +1283,25 @@ function homeReminders(){
 const parseSubs = (txt, old) => String(txt||"").split("\n").map(x => x.replace(/^\s*[-*•✓☐]\s*/, "").trim()).filter(Boolean).slice(0, 50)
   .map(t => { const o = (old||[]).find(x => x.t===t); return {t: t.slice(0, 140), d: !!(o && o.d)}; });
 const subsText = it => (it.subs||[]).map(x => x.t).join("\n");
+/* Sub-task editor: tick box + text per row, kept in state.subDraft[p] across re-renders. */
+function subDraft(p){ state.subDraft = state.subDraft || {}; if (!state.subDraft[p]) state.subDraft[p] = [{t:"", d:false}]; return state.subDraft[p]; }
+function subsEditor(p){
+  const rows = subDraft(p);
+  return `<div class="sdlist" id="${p}-sdlist">${rows.map((x,i) => sdRow(p, i, x)).join("")}
+    <button type="button" class="btn ghost" data-act="sd-add" data-p="${p}">+ Add sub-task</button></div>`;
+}
+const sdRow = (p, i, x) => `<div class="sdrow">
+      <input type="checkbox" id="${p}-sdc-${i}" data-live="1" data-sdc="${p}" data-i="${i}" ${x.d ? "checked" : ""} aria-label="Done">
+      <input class="field" id="${p}-sd-${i}" data-live="1" data-sd="${p}" data-i="${i}" maxlength="140" value="${esc(x.t)}" placeholder="${i===0 ? "e.g. A4 sheet 2 ream" : "Next item"}" enterkeyhint="next">
+      <button type="button" class="del" data-act="sd-del" data-p="${p}" data-i="${i}" aria-label="Remove">✕</button></div>`;
+/* Add a row in place (no full re-render, so the keyboard stays open). */
+function addSubRow(p){
+  const r = subDraft(p); r.push({t:"", d:false});
+  const list = document.getElementById(p+"-sdlist"), btn = list && list.querySelector("[data-act=sd-add]");
+  if (btn) btn.insertAdjacentHTML("beforebegin", sdRow(p, r.length-1, r[r.length-1])); else render();
+  const el = document.getElementById(`${p}-sd-${r.length-1}`); if (el) el.focus();
+}
+const readSubs = (p, old) => subDraft(p).map(x => ({t: x.t.trim().slice(0, 140), d: !!x.d})).filter(x => x.t).slice(0, 50);
 function subsBlock(id, t){
   const subs = t.subs || [];
   if (!subs.length && !t.note) return "";
@@ -2524,7 +2548,9 @@ document.addEventListener("click", e => {
     if (all) toast("All sub-tasks done · task completed ✓");
     return;
   }
-  if (act==="edit"){ state.editing = state.editing===id ? null : id; render(); return; }
+  if (act==="edit"){ state.editing = state.editing===id ? null : id; if (state.editing && it){ subDraft("ed"); state.subDraft.ed = (it.subs||[]).length ? it.subs.map(x => ({...x})) : [{t:"", d:false}]; } render(); return; }
+  if (act==="sd-add"){ addSubRow(b.dataset.p); return; }
+  if (act==="sd-del"){ const p = b.dataset.p, r = subDraft(p); r.splice(Number(b.dataset.i), 1); if (!r.length) r.push({t:"", d:false}); render(); return; }
   if (act==="ed-cancel"){ state.editing = null; render(); return; }
   if (act==="ed-save" && it){
     const title = valOf("ed-title").trim();
@@ -2532,7 +2558,7 @@ document.addEventListener("click", e => {
     const next = {...it, title, area: valOf("ed-area") || itemArea(it)};
     delete next.win;
     const note = valOf("ed-note").trim(); if (note) next.note = note; else delete next.note;
-    if (it.kind==="todo"){ const subs = parseSubs(valOf("ed-subs"), it.subs); if (subs.length) next.subs = subs; else delete next.subs; }
+    if (it.kind==="todo"){ const subs = readSubs("ed"); if (subs.length){ next.subs = subs; if (subs.every(x => x.d) && !it.done){ next.done = true; next.doneAt = Date.now(); } } else delete next.subs; state.subDraft.ed = null; }
     if (it.kind==="yearly"){
       const r = readPeriod("ed"); if (r.err){ toast(r.err); return; } next.period = r.p;
       const a = valOf("ed-amt").trim() ? num(valOf("ed-amt")) : 0, sv = valOf("ed-saved").trim() ? num(valOf("ed-saved")) : 0;
@@ -2652,6 +2678,8 @@ function addReminder(r){
 }
 
 document.addEventListener("input", e => {
+  const sp = e.target.dataset && e.target.dataset.sd;
+  if (sp){ const r = subDraft(sp), i = Number(e.target.dataset.i); if (r[i]) r[i].t = e.target.value; return; }
   const k = e.target.dataset && e.target.dataset.j;
   if (k){ ensureDraft(); state.jdraft[k] = e.target.value; if (state.jsaved){ state.jsaved = false; } }
   if (["g-amt","g-saved","g-by","g-start"].includes(e.target.id)) goalPreview();
@@ -2659,11 +2687,20 @@ document.addEventListener("input", e => {
   if (["w-val","w-rate","w-monthly","w-tenure"].includes(e.target.id)) p2pPreview();
   if (e.target.id==="w-freq") p2pPreview();
 });
+document.addEventListener("keydown", e => {
+  const sp = e.target.dataset && e.target.dataset.sd;
+  if (!sp || e.key !== "Enter") return;
+  e.preventDefault();
+  const r = subDraft(sp), i = Number(e.target.dataset.i);
+  if (i === r.length - 1){ if (e.target.value.trim()) addSubRow(sp); return; }
+  const el = document.getElementById(`${sp}-sd-${i+1}`); if (el) el.focus();
+});
 document.addEventListener("toggle", e => {
   const d = e.target; if (d && d.dataset && d.dataset.chart && d.open) loadChart(d.dataset.chart);
 }, true);
 document.addEventListener("change", e => {
   const t = e.target;
+  if (t.dataset && t.dataset.sdc){ const r = subDraft(t.dataset.sdc), i = Number(t.dataset.i); if (r[i]) r[i].d = t.checked; return; }
   if (t.id==="r-repeat") syncFormVisibility();
   if (t.id==="g-area") state.goalArea = t.value;
   if (t.dataset.h){
@@ -2727,11 +2764,11 @@ document.addEventListener("submit", e => {
     if (planOf(kind).period) data.log = {};
     if (kind==="todo") data.done = false;
     const note = val("new-note").trim(); if (note) data.note = note.slice(0, 2000);
-    if (kind==="todo"){ const subs = parseSubs(val("new-subs")); if (subs.length) data.subs = subs; }
+    if (kind==="todo"){ const subs = readSubs("nw"); if (subs.length) data.subs = subs; state.subDraft.nw = null; }
     const nid = newId();
     state.items.set(nid, data);
     const rr = setPlanReminder(nid, data, "nr");
-    clear("new-title", "nr-rtime", "new-note", "new-subs");
+    clear("new-title", "nr-rtime", "new-note");
     const box = document.getElementById("nw-remind"); if (box) box.open = false;
     const mb = document.getElementById("nw-more"); if (mb) mb.open = false;
     afterChange("reminder");
