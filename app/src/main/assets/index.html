@@ -212,6 +212,8 @@ ul.list li.wrap{flex-wrap:wrap}
 .subs .on .bx{background:var(--blue);border-color:var(--blue)}
 .subs .on span:last-child{text-decoration:line-through;color:var(--muted)}
 .subadd{display:flex;gap:6px;margin-top:4px}
+.tlink{background:none;border:0;padding:0;font:inherit;text-align:left;color:inherit;cursor:pointer}
+li.done .tlink{text-decoration:line-through;color:var(--muted)}
 .subadd .field{padding:6px 10px;font-size:14px;min-height:0}
 .acard{padding:0;overflow:hidden;gap:0}
 .sdlist{display:flex;flex-direction:column;gap:6px}
@@ -783,6 +785,7 @@ function planMoney(kind){
 
 /* ---------- render ---------- */
 function render(){
+  if (tpTimer){ clearTimeout(tpTimer); tpTimer = null; ["title","note"].forEach(f => { const el = document.getElementById("tp-"+f); if (el) tpSave(f, el.value); }); }
   const d = state.now;
   document.getElementById("today").textContent = `${DAYS[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
   document.getElementById("nav").innerHTML = TABS.map(t => `<button data-act="go" data-tab="${t.k}" ${t.k==="more" && state.update ? `data-more="app"` : ""} aria-current="${state.tab===t.k?"page":"false"}"><span class="pill">${icon(t.icon)}</span>${t.k==="more" && state.update ? `<span class="dot" aria-label="Update available"></span>` : ""}${t.label}</button>`).join("");
@@ -1139,8 +1142,56 @@ function editorRow(id, it){
   </li>`;
 }
 
+/* Task page: one to-do on its own screen, with a big note and a checklist of tasks inside it. */
+function renderTaskPage(id, t){
+  const subs = t.subs || [], sd = subs.filter(x => x.d).length, ts = new Date(t.created || Date.now());
+  const rl = planReminder(id);
+  return `<div class="between"><button class="btn ghost" data-act="tp-back">‹ Back</button>
+      <button class="btn ${t.done ? "ghost" : ""}" data-act="todo" data-id="${id}">${t.done ? "↺ Mark not done" : "✓ Mark task done"}</button></div>
+    <div class="card" style="gap:8px">
+      <input class="field" id="tp-title" data-live="1" data-tp="title" maxlength="140" value="${esc(t.title)}" style="font-size:20px;font-weight:700;border-color:transparent;padding-left:4px" aria-label="Task name">
+      <div class="between"><span class="tiny muted">Added ${ts.getDate()} ${MON[ts.getMonth()]} ${ts.getFullYear()}${t.done && t.doneAt ? ` · done ${new Date(t.doneAt).getDate()} ${MON[new Date(t.doneAt).getMonth()]}` : ""}${rl && rl[1].enabled!==false ? ` · ⏰ ${esc(rl[1].time)}` : ""}</span>
+        <select class="field" id="tp-area" data-live="1" data-tp="area" style="flex:0 1 130px;padding:6px 10px" aria-label="Category">${areaOptions(itemArea(t))}</select></div>
+    </div>
+    <div class="card" style="gap:8px">
+      <div class="between"><b class="mid">📝 Note</b><span class="tiny muted" id="tp-saved">Saves as you type</span></div>
+      <textarea class="field" id="tp-note" data-live="1" data-tp="note" maxlength="5000" style="min-height:140px" placeholder="Write anything: shop name, price, phone number, steps, ideas…">${esc(t.note || "")}</textarea>
+    </div>
+    <div class="card acard">
+      <div class="between"><b class="mid">☑️ Tasks inside</b><span class="chip">${sd}/${subs.length}</span></div>
+      ${subs.length ? bar(sd/subs.length*100, sd===subs.length ? "good" : "") : ""}
+      <ul class="list" style="border:0;border-radius:0">${subs.map((x,i) => `<li class="${x.d?"done":""}">
+          <button class="check" data-act="sub" data-id="${id}" data-i="${i}" aria-pressed="${x.d}" aria-label="Mark ${esc(x.t)} ${x.d?"not done":"done"}">${CHECK}</button>
+          <div class="main"><span class="title">${esc(x.t)}</span></div>
+          <button class="del" data-act="tp-sub-del" data-id="${id}" data-i="${i}" aria-label="Remove ${esc(x.t)}">✕</button></li>`).join("")}</ul>
+      <form id="tp-add" class="inline" autocomplete="off" style="padding:10px 14px" data-id="${id}">
+        <input class="field" id="tp-new" maxlength="140" placeholder="+ Add a task inside" enterkeyhint="done" aria-label="New task inside">
+        <button class="btn" type="submit">Add</button></form>
+    </div>
+    <div class="between"><button class="del" data-act="del" data-id="${id}">Delete task</button><button class="del" data-act="tp-back">Close</button></div>`;
+}
+let tpTimer = null;
+function tpSave(field, value){
+  const id = state.taskPage, it = id && state.items.get(id); if (!it) return;
+  const next = {...it};
+  if (field==="title"){ const v = value.trim(); if (!v) return; next.title = v.slice(0, 140); }
+  else if (field==="area") next.area = value;
+  else { const v = value.trim(); if (v) next.note = v.slice(0, 5000); else delete next.note; }
+  state.items.set(id, next); persist();
+  if (field==="title"){ const rl = planReminder(id); if (rl){ state.items.set(rl[0], {...rl[1], title: next.title}); persist(); syncReminders(); } }
+  const el = document.getElementById("tp-saved"); if (el) el.textContent = "Saved ✓";
+}
+window.__back = () => {
+  if (state.taskPage){ state.taskPage = null; render(); return true; }
+  if (state.editing){ state.editing = null; render(); return true; }
+  if (state.xOpen){ state.xOpen = null; render(); return true; }
+  if (state.tab !== "home"){ go("home"); return true; }
+  return false;
+};
+
 /* PLAN */
 function renderPlan(){
+  if (state.taskPage){ const t = state.items.get(state.taskPage); if (t && t.kind==="todo") return renderTaskPage(state.taskPage, t); state.taskPage = null; }
   const kd = planOf(state.plan) || PLAN[0], d = state.now, list = byKind(kd.k);
   let head = "";
   if (kd.k==="yearly"){
@@ -1313,7 +1364,7 @@ function todoRow(id, t){
   const subs = t.subs || [], sd = subs.filter(x => x.d).length;
   return `<li class="${t.done?"done":""}" style="align-items:flex-start">
     <button class="check" data-act="todo" data-id="${id}" aria-pressed="${!!t.done}" aria-label="Mark ${esc(t.title)} ${t.done?"not done":"done"}">${CHECK}</button>
-    <div class="main"><span class="title">${esc(t.title)}</span>
+    <div class="main"><button type="button" class="title tlink" data-act="tp-open" data-id="${id}">${esc(t.title)} <span class="muted">›</span></button>
       <span class="meta">${t.done ? "Done" : "Added"} ${ts.getDate()} ${MON[ts.getMonth()]}${state.todoFlat || t.done ? " · " + areaOf(itemArea(t)).label : ""}${subs.length ? ` · ${sd}/${subs.length} done` : ""}${t.done ? "" : remindChip(id)}</span>
       ${t.done ? "" : subsBlock(id, t)}</div>
     ${editBtn(id)}</li>`;
@@ -2398,7 +2449,7 @@ function renderBackup(){
 /* ---------- actions ---------- */
 let armed = null, armTimer = null;
 function go(tab, sub){
-  state.tab = tab;
+  state.tab = tab; state.taskPage = null;
   if (sub){ for (const [k,v] of Object.entries(sub)) if (v) state[k] = v; }
   saveView(); render(); window.scrollTo(0,0);
 }
@@ -2540,6 +2591,9 @@ document.addEventListener("click", e => {
     updateItem(id, {log});
   }
   if (act==="todo" && it) updateItem(id, {done:!it.done, doneAt: it.done ? null : Date.now()});
+  if (act==="tp-open"){ state.taskPage = id; state.editing = null; render(); window.scrollTo(0, 0); return; }
+  if (act==="tp-back"){ state.taskPage = null; render(); return; }
+  if (act==="tp-sub-del" && it && Array.isArray(it.subs)){ const subs = it.subs.filter((_,j) => j!==Number(b.dataset.i)); updateItem(id, subs.length ? {subs} : {subs: undefined}); return; }
   if (act==="todo-flat"){ state.todoFlat = !state.todoFlat; render(); return; }
   if (act==="sub" && it && Array.isArray(it.subs)){
     const i = Number(b.dataset.i), subs = it.subs.map((x,j) => j===i ? {...x, d:!x.d} : x);
@@ -2678,6 +2732,8 @@ function addReminder(r){
 }
 
 document.addEventListener("input", e => {
+  const tp = e.target.dataset && e.target.dataset.tp;
+  if (tp==="note" || tp==="title"){ const el = document.getElementById("tp-saved"); if (el) el.textContent = "Saving…"; clearTimeout(tpTimer); const v = e.target.value; tpTimer = setTimeout(() => tpSave(tp, v), 500); return; }
   const sp = e.target.dataset && e.target.dataset.sd;
   if (sp){ const r = subDraft(sp), i = Number(e.target.dataset.i); if (r[i]) r[i].t = e.target.value; return; }
   const k = e.target.dataset && e.target.dataset.j;
@@ -2700,6 +2756,7 @@ document.addEventListener("toggle", e => {
 }, true);
 document.addEventListener("change", e => {
   const t = e.target;
+  if (t.dataset && t.dataset.tp==="area"){ tpSave("area", t.value); render(); return; }
   if (t.dataset && t.dataset.sdc){ const r = subDraft(t.dataset.sdc), i = Number(t.dataset.i); if (r[i]) r[i].d = t.checked; return; }
   if (t.id==="r-repeat") syncFormVisibility();
   if (t.id==="g-area") state.goalArea = t.value;
@@ -2746,6 +2803,13 @@ document.addEventListener("submit", e => {
   const f = e.target, val = id => (document.getElementById(id)||{}).value || "";
   const clear = (...ids) => ids.forEach(id => { const el = document.getElementById(id); if (el){ el.value = ""; el.dataset.keep = "no"; } });
 
+  if (f.id==="tp-add"){
+    const id = f.dataset.id, it = state.items.get(id), v = val("tp-new").trim(); if (!it || !v) return;
+    const subs = [...(it.subs||[]), {t: v.slice(0, 140), d:false}].slice(0, 100);
+    state.items.set(id, {...it, subs, done:false, doneAt:null}); persist();
+    render(); const el = document.getElementById("tp-new"); if (el){ el.value = ""; el.focus(); }
+    return;
+  }
   if (f.id==="add-form"){
     const title = val("new-title").trim(); if (!title) return;
     const kind = state.plan, data = {kind, title, area: val("new-area") || guessArea(title), created: Date.now()};

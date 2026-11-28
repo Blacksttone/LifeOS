@@ -26,6 +26,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+        }
 
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -76,6 +80,16 @@ public class MainActivity extends Activity {
         ReminderScheduler.scheduleAll(this);
         try { Geo.registerAll(this, null); } catch (Exception ignored) {}
     }
+
+    /** Back: let the page close an open screen first (task page, chat); otherwise leave the app. */
+    private void handleBack() {
+        if (web == null) { moveTaskToBack(true); return; }
+        web.evaluateJavascript("window.__back ? window.__back() : false", v -> { if (!"true".equals(v)) moveTaskToBack(true); });
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() { handleBack(); }
 
     /** Runs a script in the page from any thread. */
     void runJs(final String js) {
